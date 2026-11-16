@@ -247,12 +247,27 @@ class SessionStore:
         return rows
 
     def history(self, session_id: str, limit: int = 24) -> list[dict[str, str]]:
+        """Build model-safe history.
+
+        Human agent replies are stored as ``role=human`` so they are never
+        mistaken for model output.  The model contract only accepts
+        ``user`` / ``assistant``; convert a human row into a clearly labelled
+        user row (``[人工客服]``) instead of passing an unknown role through.
+        The original row keeps its real role and author metadata for the UI.
+        """
         rows = self.transcript(session_id)
-        history = [
-            {"role": str(item.get("role")), "content": str(item.get("content"))}
-            for item in rows
-            if item.get("role") in {"user", "assistant"} and not item.get("interrupted")
-        ]
+        history: list[dict[str, str]] = []
+        for item in rows:
+            role = str(item.get("role"))
+            if item.get("interrupted"):
+                continue
+            content = str(item.get("content"))
+            if role == "human":
+                role = "user"
+                content = "[人工客服] " + content
+            elif role not in {"user", "assistant"}:
+                continue
+            history.append({"role": role, "content": content})
         return history[-limit:]
 
     # ------------------------------------------------------------ files

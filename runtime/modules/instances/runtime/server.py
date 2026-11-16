@@ -14,9 +14,10 @@ import queue
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 try:
@@ -33,6 +34,16 @@ try:
         SessionCapacity,
         SessionManager,
     )
+    from .handoff import (
+        DEFAULT_OPERATOR,
+        HandoffConflict,
+        HandoffCorrupt,
+        HandoffNotFound,
+        HumanHandoffStore,
+        admin_ticket_view,
+        queued_for_admin,
+        ticket_view,
+    )
 except ImportError:  # artifact runtime is flat (server/store/worker on sys.path)
     from store import (  # type: ignore
         SessionBindingError,
@@ -46,6 +57,16 @@ except ImportError:  # artifact runtime is flat (server/store/worker on sys.path
         SessionBusy,
         SessionCapacity,
         SessionManager,
+    )
+    from handoff import (  # type: ignore
+        DEFAULT_OPERATOR,
+        HandoffConflict,
+        HandoffCorrupt,
+        HandoffNotFound,
+        HumanHandoffStore,
+        admin_ticket_view,
+        queued_for_admin,
+        ticket_view,
     )
 
 try:  # project-owned business policy; generic artifacts may not ship it
@@ -174,8 +195,79 @@ class ResumeRequest(BaseModel):
     decision: bool = True
 
 
+class HandoffRequestBody(BaseModel):
+    request_id: str | None = None
+
+
+class AdminReplyBody(BaseModel):
+    message: str = Field(min_length=1)
+    request_id: str = Field(min_length=1)
+
+
+class AdminCloseBody(BaseModel):
+    note: str = ""
+    request_id: str | None = None
+
+
 def _error(status_code: int, code: str, message: str) -> None:
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def _loopback_binding(host: str | None) -> bool:
+    value = str(host or "").strip().lower().strip("[]")
+    return value in {"127.0.0.1", "localhost", "::1"}
+
+
+def _admin_enabled(config) -> bool:
+    """Local single-agent admin is allowed only when the listener is loopback.
+
+    Deliberately uses the configured bind host, not ``Host`` / ``X-Forwarded-*``:
+    a reverse proxy or a forged forwarding header must not turn a remote bind
+    into a local admin surface.  No account system is added; remote binds
+    simply have no management API.
+    """
+    return _loopback_binding(getattr(config, "host", None))
+
+
+def _same_origin(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        # Local tools / curl are allowed; browsers always attach Origin on
+        # cross-site POSTs.  Never trust Forwarded headers here.
+        return True
+    if origin.strip().lower() == "null":
+        return False
+    parsed = urlparse(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    host = str(request.headers.get("host") or "").strip().lower()
+    return bool(host) and parsed.netloc.strip().lower() == host
+
+
+def _json_write(request: Request) -> bool:
+    content_type = str(request.headers.get("content-type") or "")
+    return content_type.split(";", 1)[0].strip().lower() == "application/json"
+
+
+def _require_write(request: Request) -> None:
+    if not _same_origin(request):
+        _error(403, "origin_rejected", "写入请求必须同源")
+    if not _json_write(request):
+        _error(415, "json_required", "写入请求必须使用 application/json")
+
+
+def _map_handoff_exception(exc: Exception) -> None:
+    if isinstance(exc, HandoffNotFound):
+        _error(404, "handoff_not_found", str(exc))
+    if isinstance(exc, HandoffConflict):
+        _error(409, "handoff_conflict", str(exc))
+    if isinstance(exc, HandoffCorrupt):
+        _error(500, "handoff_corrupt", str(exc))
+    if isinstance(exc, SessionNotFound):
+        _error(404, "session_not_found", str(exc))
+    if isinstance(exc, SessionEnded):
+        _error(409, "session_ended", str(exc))
+    _error(500, "handoff_error", str(exc))
 
 
 def _map_exception(exc: Exception) -> None:
@@ -323,6 +415,50 @@ def create_app(config) -> FastAPI:
     app.state.instance_config = config
     app.state.store = store
     app.state.manager = manager
+    handoff = HumanHandoffStore(store)
+    app.state.handoff = handoff
+
+    @app.middleware("http")
+    async def admin_guard(request: Request, call_next):
+        path = request.url.path
+        is_api = path in {"/api/admin", "/api/v1/admin"} or path.startswith(
+            ("/api/admin/", "/api/v1/admin/")
+        )
+        is_page = path in {"/admin", "/admin.html"}
+        if not (is_api or is_page):
+            return await call_next(request)
+        if not _admin_enabled(config):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": {
+                        "code": "admin_local_only",
+                        "message": "管理后台仅在本机 loopback 绑定时可用，远程绑定未配置管理认证",
+                    }
+                },
+            )
+        if is_api and request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+            if not _same_origin(request):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": {
+                            "code": "origin_rejected",
+                            "message": "管理写入必须同源",
+                        }
+                    },
+                )
+            if not _json_write(request):
+                return JSONResponse(
+                    status_code=415,
+                    content={
+                        "detail": {
+                            "code": "json_required",
+                            "message": "管理写入必须使用 application/json",
+                        }
+                    },
+                )
+        return await call_next(request)
 
     def dual(path: str, methods: list[str]):
         def decorate(func):
@@ -384,6 +520,7 @@ def create_app(config) -> FastAPI:
             "session_id": session_id,
             "transcript": transcript,
             "workspace": str(store.workspace_path(session_id)),
+            "handoff": handoff.public_status(session_id),
         }
         if SUPPORT_ENABLED:
             state = support_load_state(store.load_support_state(session_id))
@@ -418,6 +555,256 @@ def create_app(config) -> FastAPI:
         state = support_load_state(store.load_support_state(session_id))
         messages = store.transcript(session_id)
         return support_handoff_summary(state, session_id, messages)
+
+    # ------------------------------------------------ human handoff (user side)
+    def _handoff_sse(ticket: dict, message: dict):
+        def events():
+            yield "data: " + json.dumps(
+                {
+                    "type": "handoff",
+                    "ticket": ticket_view(ticket),
+                    "message": message,
+                },
+                ensure_ascii=False,
+                default=str,
+            ) + "\n\n"
+            yield "data: " + json.dumps({"type": "done"}, ensure_ascii=False) + "\n\n"
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store", "X-RVS-Handoff": "1"},
+        )
+
+    @dual("/sessions/{session_id}/handoff", ["GET"])
+    def get_handoff(session_id: str):
+        try:
+            store.get(session_id)
+        except Exception as exc:  # noqa: BLE001
+            _map_exception(exc)
+        try:
+            return handoff.public_status(session_id)
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+
+    @dual("/sessions/{session_id}/handoff/request", ["POST"])
+    def request_handoff(
+        session_id: str,
+        request: Request,
+        body: HandoffRequestBody | None = None,
+    ):
+        """Idempotently put this session in the human queue.
+
+        The request is serialised with the chat entry point by the same
+        per-session gate; an in-flight agent run returns 409 instead of being
+        silently raced.  A closed ticket may be followed by a fresh request.
+        """
+        _require_write(request)
+        try:
+            store.require_active(session_id)
+        except Exception as exc:  # noqa: BLE001
+            _map_exception(exc)
+        try:
+            with handoff.gate(session_id):
+                session = manager.peek(session_id)
+                busy = bool(
+                    session is not None
+                    and (
+                        session.closing
+                        or session.running
+                        or session.pending_thread_id
+                        or session.busy.locked()
+                    )
+                )
+                if busy:
+                    _error(409, "session_busy", "机器人正在处理当前消息，请稍后再申请人工")
+                result = handoff.request(
+                    session_id,
+                    request_id=(body.request_id if body else None),
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+        return {
+            "ok": True,
+            "ticket": ticket_view(result["ticket"]),
+            "created": result["created"],
+            "duplicate": result["duplicate"],
+        }
+
+    @dual("/sessions/{session_id}/handoff/messages", ["GET"])
+    def handoff_messages(session_id: str, after: int = 0):
+        try:
+            store.get(session_id)
+        except Exception as exc:  # noqa: BLE001
+            _map_exception(exc)
+        try:
+            payload = handoff.human_messages(session_id, after)
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+        return payload
+
+    # ------------------------------------------------ local single-agent admin
+    def _admin_ticket_for(session_id: str) -> dict:
+        try:
+            ticket = handoff.current(session_id)
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+        if ticket is None:
+            _error(404, "handoff_not_found", "该会话没有人工工单")
+        return ticket
+
+    def _handoff_snapshot(session_id: str, transcript: list[dict]) -> dict | None:
+        if not SUPPORT_ENABLED:
+            return None
+        state = support_load_state(store.load_support_state(session_id))
+        return support_handoff_summary(state, session_id, transcript)
+
+    def _admin_row(metadata: dict) -> dict | None:
+        session_id = str(metadata.get("session_id") or "")
+        try:
+            ticket = handoff.current(session_id)
+        except HandoffCorrupt:
+            return {
+                "session_id": session_id,
+                "session_status": metadata.get("status"),
+                "workflow": metadata.get("workflow"),
+                "ticket": None,
+                "ticket_status": "corrupt",
+                "updated_at": metadata.get("updated_at"),
+                "last_user_excerpt": "",
+                "handoff_excerpt": "人工工单文件损坏，需人工检查",
+                "queued_count": 0,
+            }
+        if ticket is None:
+            return None
+        transcript = store.transcript(session_id)
+        users = [item for item in transcript if str(item.get("role")) == "user"]
+        last_user = users[-1] if users else {}
+        snapshot = _handoff_snapshot(session_id, transcript)
+        queued = queued_for_admin(ticket)
+        return {
+            "session_id": session_id,
+            "session_status": metadata.get("status"),
+            "workflow": metadata.get("workflow"),
+            "ticket": admin_ticket_view(ticket),
+            "ticket_id": ticket.get("ticket_id"),
+            "ticket_status": ticket.get("status"),
+            "updated_at": ticket.get("updated_at") or metadata.get("updated_at"),
+            "last_user_excerpt": str(last_user.get("content") or "")[:300],
+            "last_user_at": last_user.get("at"),
+            "handoff_excerpt": (snapshot or {}).get("summary", "")[:700],
+            "queued_count": sum(1 for item in queued if not item.get("handled")),
+        }
+
+    @dual("/admin/handoff", ["GET"])
+    def admin_list_handoff(status: str = "all"):
+        if status not in {"all", "waiting", "active", "closed"}:
+            _error(422, "invalid_status", "status 只能是 all/waiting/active/closed")
+        rows = []
+        for metadata in store.list():
+            row = _admin_row(metadata)
+            if row is None:
+                continue
+            if status != "all" and row.get("ticket_status") != status:
+                continue
+            rows.append(row)
+        rows.sort(key=lambda item: float(item.get("updated_at") or 0), reverse=True)
+        counts = {"waiting": 0, "active": 0, "closed": 0}
+        for metadata in store.list():
+            try:
+                ticket = handoff.current(str(metadata.get("session_id") or ""))
+            except HandoffCorrupt:
+                continue
+            if ticket and ticket.get("status") in counts:
+                counts[ticket["status"]] += 1
+        return {
+            "rows": rows[:200],
+            "counts": counts,
+            "filter": status,
+            "admin": {
+                "mode": "local_single_agent",
+                "operator": DEFAULT_OPERATOR,
+                "auth": "loopback_only",
+            },
+        }
+
+    @dual("/admin/handoff/{session_id}", ["GET"])
+    def admin_get_handoff(session_id: str):
+        try:
+            metadata = store.get(session_id)
+            transcript = store.transcript(session_id)
+        except Exception as exc:  # noqa: BLE001
+            _map_exception(exc)
+        ticket = _admin_ticket_for(session_id)
+        return {
+            "ticket": admin_ticket_view(ticket),
+            "session": {**metadata, "session_id": session_id},
+            "transcript": transcript,
+            "handoff": _handoff_snapshot(session_id, transcript),
+            "queued_messages": queued_for_admin(ticket),
+            "admin": {
+                "mode": "local_single_agent",
+                "operator": DEFAULT_OPERATOR,
+                "auth": "loopback_only",
+            },
+        }
+
+    @dual("/admin/handoff/{session_id}/accept", ["POST"])
+    def admin_accept_handoff(session_id: str):
+        try:
+            store.get(session_id)
+            result = handoff.accept(session_id)
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+        return {
+            "ok": True,
+            "ticket": admin_ticket_view(result["ticket"]),
+            "changed": result["changed"],
+        }
+
+    @dual("/admin/handoff/{session_id}/reply", ["POST"])
+    def admin_reply_handoff(session_id: str, body: AdminReplyBody):
+        try:
+            store.get(session_id)
+            result = handoff.reply(
+                session_id,
+                body.message,
+                request_id=body.request_id,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+        return {
+            "ok": True,
+            "ticket": admin_ticket_view(result["ticket"]),
+            "message": result["message"],
+            "duplicate": result["duplicate"],
+        }
+
+    @dual("/admin/handoff/{session_id}/close", ["POST"])
+    def admin_close_handoff(session_id: str, body: AdminCloseBody | None = None):
+        try:
+            store.get(session_id)
+            result = handoff.close(
+                session_id,
+                note=(body.note if body else ""),
+                request_id=(body.request_id if body else None),
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+        return {
+            "ok": True,
+            "ticket": admin_ticket_view(result["ticket"]),
+            "changed": result["changed"],
+            "duplicate": result["duplicate"],
+        }
 
     @dual("/sessions/{session_id}", ["DELETE"])
     def end_session(session_id: str):
@@ -505,7 +892,11 @@ def create_app(config) -> FastAPI:
                 else:
                     next_turn = int((support_state or {}).get("turn") or 0) + 1
                     user_record = store.append_message(
-                        session_id, "user", run_prompt, turn=next_turn
+                        session_id,
+                        "user",
+                        run_prompt,
+                        turn=next_turn,
+                        author={"kind": "user", "display_name": "用户"},
                     )
                     if support_state is not None:
                         interpretation = None
@@ -603,6 +994,7 @@ def create_app(config) -> FastAPI:
                                 "assistant",
                                 direct,
                                 turn=support_state.get("turn"),
+                                author={"kind": "assistant", "display_name": "机器人助手"},
                             )
                             support_state = support_apply_assistant_turn(
                                 support_state,
@@ -673,6 +1065,7 @@ def create_app(config) -> FastAPI:
                             interrupted=interrupted,
                             thread_id=result.get("thread_id"),
                             turn=(support_state or {}).get("turn"),
+                            author={"kind": "assistant", "display_name": "机器人助手"},
                         )
                 else:
                     assistant_record = store.append_message(
@@ -682,6 +1075,7 @@ def create_app(config) -> FastAPI:
                         interrupted=interrupted,
                         thread_id=result.get("thread_id"),
                         turn=(support_state or {}).get("turn"),
+                        author={"kind": "assistant", "display_name": "机器人助手"},
                     )
                 if support_state is not None:
                     if latency is not None:
@@ -846,11 +1240,32 @@ def create_app(config) -> FastAPI:
             headers["X-RVS-Cold"] = "1" if ctx.get("cold") else "0"
         return StreamingResponse(events(), media_type="text/event-stream", headers=headers)
 
+    def _handoff_or_reserve(session_id: str, prompt: str):
+        """Atomically choose human queue vs. agent run for one user message.
+
+        The gate is shared with ``request_handoff``.  It is held only while the
+        routing decision and reservation happen, never for the whole LLM run.
+        """
+        try:
+            with handoff.gate(session_id):
+                ticket = handoff.current(session_id)
+                if ticket and ticket.get("status") in {"waiting", "active"}:
+                    routed = handoff.queue_user_message(session_id, prompt)
+                    if routed is not None:
+                        return "handoff", routed
+                return "run", _reserve(session_id)
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _map_handoff_exception(exc)
+
     @dual("/sessions/{session_id}/messages", ["POST"])
     def post_message(session_id: str, body: MessageRequest, request: Request):
         if latency is None:
-            reservation = _reserve(session_id)
-            return _sse(session_id, {"prompt": body.prompt}, "run", reservation)
+            kind, value = _handoff_or_reserve(session_id, body.prompt)
+            if kind == "handoff":
+                return _handoff_sse(value["ticket"], value["message"])
+            return _sse(session_id, {"prompt": body.prompt}, "run", value)
         request_id = request.headers.get("X-RVS-Request-Id") or latency.new_id("req")
         turn_id = request.headers.get("X-RVS-Turn-Id") or latency.new_id("turn")
         cold = manager.peek(session_id) is None
@@ -863,13 +1278,15 @@ def create_app(config) -> FastAPI:
         with latency.bind_context(**ctx):
             latency.point("server.receive", path="/messages", cold=cold)
             with latency.span("server.reserve", cold=cold):
-                reservation = _reserve(session_id)
+                kind, value = _handoff_or_reserve(session_id, body.prompt)
+            if kind == "handoff":
+                return _handoff_sse(value["ticket"], value["message"])
             request_span = latency.open_span("server.request", cold=cold)
             return _sse(
                 session_id,
                 {"prompt": body.prompt},
                 "run",
-                reservation,
+                value,
                 latency_ctx=ctx,
                 request_span=request_span,
             )
@@ -934,6 +1351,15 @@ def create_app(config) -> FastAPI:
         return FileResponse(target, filename=target.name)
 
     # ------------------------------------------------------------ product UI
+    @app.get("/admin")
+    @app.get("/admin.html")
+    def admin_page():
+        root = _ui_root(config)
+        target = root / "admin.html"
+        if not target.is_file():
+            _error(404, "admin_missing", "后台页面缺失")
+        return FileResponse(target, headers={"Cache-Control": "no-store"})
+
     @app.get("/")
     def index():
         root = _ui_root(config)
@@ -946,6 +1372,10 @@ def create_app(config) -> FastAPI:
     def static_file(path: str):
         root = _ui_root(config).resolve()
         target = (root / path).resolve()
+        # Only the guarded /admin and /admin.html routes may serve the admin
+        # page; a case/path variant must not bypass the loopback middleware.
+        if target.name.lower() == "admin.html":
+            _error(404, "not_found", "页面不存在")
         if target.is_file() and target.is_relative_to(root):
             return FileResponse(target, headers={"Cache-Control": "no-store"})
         return index()

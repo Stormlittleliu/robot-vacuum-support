@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人工坐席后台</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0e131a; --panel:#161e29; --panel2:#1b2532; --line:#2b3747; --text:#e8eef7; --muted:#93a1b5; --accent:#4f8cff; --ok:#43b581; --warn:#e0a640; --danger:#d45454; --human:#7bd6b0; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:2; }
+  header h1 { font-size:17px; margin:0; white-space:nowrap; }
+  header .sub { color:var(--muted); font-size:12px; }
+  header .grow { flex:1; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:3px 9px; font-size:12px; color:var(--muted); white-space:nowrap; }
+  .pill.local { color:#9fe3c1; border-color:#2f5e4b; background:#12241d; }
+  a { color:#9cc4ff; text-decoration:none; }
+  button { background:#243244; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 11px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; border-color:var(--line); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.ok { background:#1f6b4e; border-color:#2b8a67; color:#eafff5; }
+  button.danger { color:#ffc1c1; border-color:#6a3535; background:#2b1b1b; }
+  button.ghost { background:transparent; }
+  .layout { display:grid; grid-template-columns:340px minmax(0,1fr); height:calc(100vh - 63px); }
+  aside { border-right:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; min-height:0; }
+  .filters { display:flex; gap:6px; padding:10px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .filters button { padding:5px 9px; font-size:12px; }
+  .filters button.active { background:#263a57; border-color:var(--accent); color:#dceaff; }
+  .filters .count { color:var(--muted); margin-left:4px; }
+  #tickets { list-style:none; margin:0; padding:8px; overflow:auto; flex:1; }
+  #tickets li { border:1px solid var(--line); background:var(--panel2); border-radius:10px; padding:10px; margin-bottom:8px; cursor:pointer; }
+  #tickets li:hover { border-color:#3d5a7f; }
+  #tickets li.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  #tickets .top { display:flex; align-items:center; gap:8px; }
+  #tickets .sid { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#c5d7ee; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #tickets .ex { color:var(--muted); font-size:12px; margin-top:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #tickets .meta { color:#7f90a6; font-size:11px; margin-top:5px; display:flex; gap:8px; }
+  .badge { font-size:11px; border-radius:999px; padding:2px 8px; border:1px solid var(--line); white-space:nowrap; }
+  .badge.waiting { color:#ffd48a; border-color:#6a5425; background:#2a2113; }
+  .badge.active { color:#9fe3c1; border-color:#2f5e4b; background:#12241d; }
+  .badge.closed { color:#aab8ca; border-color:#39465a; background:#1a222d; }
+  .badge.corrupt { color:#ffb4b4; border-color:#633535; }
+  main.detail { min-width:0; overflow:auto; padding:16px 20px 30px; }
+  .empty { color:var(--muted); margin-top:20vh; text-align:center; }
+  .detail-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  .detail-head h2 { font-size:16px; margin:0; font-family:ui-monospace,Consolas,monospace; }
+  .detail-head .sid { color:var(--muted); font-size:12px; font-family:ui-monospace,Consolas,monospace; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
+  .columns { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(330px,.85fr); gap:16px; align-items:start; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .card h3 { font-size:13px; margin:0 0 8px; color:#c8d6e8; }
+  .card .hint { color:var(--muted); font-size:12px; }
+  .transcript { display:flex; flex-direction:column; gap:8px; max-height:56vh; overflow:auto; padding-right:4px; }
+  .msg { border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:#121922; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .msg .who { display:block; font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .msg.user { border-color:#2c4c74; background:#152238; }
+  .msg.assistant { background:#141b24; }
+  .msg.human { border-color:#2f6a56; background:#12261f; }
+  .msg.human .who { color:var(--human); }
+  .msg.system, .msg.event, .msg.error { border-style:dashed; color:var(--muted); background:transparent; }
+  .summary { white-space:pre-wrap; font-size:12px; line-height:1.55; background:#101720; border:1px solid var(--line); border-radius:9px; padding:10px; max-height:30vh; overflow:auto; margin:0; }
+  .field { display:flex; flex-direction:column; gap:5px; margin-top:10px; }
+  .field label { color:var(--muted); font-size:12px; }
+  textarea { width:100%; resize:vertical; background:#0d141d; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; }
+  textarea:disabled { opacity:.55; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .notice { margin:0 0 12px; padding:8px 11px; border:1px solid var(--line); border-radius:9px; color:var(--muted); font-size:12px; background:#111923; }
+  .notice.error { color:#ffc1c1; border-color:#633535; background:#241718; }
+  .notice.ok { color:#b8f0d8; border-color:#2f5e4b; background:#12241d; }
+  .queue { margin-top:8px; font-size:12px; color:#ffd48a; }
+  .close-note { margin-top:8px; padding:8px 10px; border-left:3px solid #39465a; color:#c8d6e8; font-size:12px; white-space:pre-wrap; background:#111923; }
+  @media (max-width:980px) { .layout { grid-template-columns:1fr; height:auto; } aside { border-right:0; border-bottom:1px solid var(--line); max-height:38vh; } .columns { grid-template-columns:1fr; } main.detail { overflow:visible; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>人工坐席后台</h1>
+  <span class="sub">本机单客服 · 会话与工单独立</span>
+  <span class="pill local" id="admin-mode">本地模式</span>
+  <span class="grow"></span>
+  <span class="pill" id="poll-state">轮询中…</span>
+  <a href="/" target="_blank" rel="noopener">用户前台</a>
+  <button id="refresh" class="ghost" type="button">刷新</button>
+</header>
+<div class="layout">
+  <aside>
+    <div class="filters" id="filters">
+      <button type="button" data-status="all" class="active">全部<span class="count" id="count-all">0</span></button>
+      <button type="button" data-status="waiting">待处理<span class="count" id="count-waiting">0</span></button>
+      <button type="button" data-status="active">处理中<span class="count" id="count-active">0</span></button>
+      <button type="button" data-status="closed">已结案<span class="count" id="count-closed">0</span></button>
+    </div>
+    <ul id="tickets" aria-label="人工工单列表"></ul>
+  </aside>
+  <main class="detail">
+    <div class="notice" id="notice">仅监听本机 loopback；无账号系统，默认单人客服。所有文本在本页仅按纯文本显示。</div>
+    <div id="detail" class="empty">左侧选择一个人工工单开始处理。</div>
+  </main>
+</div>
+<script>
+const state = {
+  filter: "all",
+  rows: [],
+  current: null,
+  detail: null,
+  replyRequestId: null,
+  closeRequestId: null,
+  loadingList: false,
+  loadingDetail: false,
+  pollTimer: null
+};
+const $ = (id) => document.getElementById(id);
+const STATUS_LABELS = { waiting:"待处理", active:"处理中", closed:"已结案", none:"无工单", corrupt:"异常" };
+const ROLE_LABELS = { user:"用户", assistant:"助手（模型）", human:"人工客服", system:"系统", event:"事件", error:"错误" };
+
+function text(node, value) { node.textContent = value == null ? "" : String(value); }
+function statusLabel(status) { return STATUS_LABELS[status] || String(status || "未知"); }
+function statusBadge(status) {
+  const span = document.createElement("span");
+  span.className = "badge " + (STATUS_LABELS[status] ? status : "closed");
+  text(span, statusLabel(status));
+  return span;
+}
+function formatTime(value) {
+  if (!value) return "—";
+  const date = new Date(Number(value) * 1000);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("zh-CN", { hour12:false });
+}
+function excerpt(value, size) {
+  const clean = String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+  return clean.length > size ? clean.slice(0, size) + "…" : clean;
+}
+function requestId() {
+  try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (_) {}
+  return "req-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+function setNotice(message, kind) {
+  const node = $("notice");
+  node.className = "notice" + (kind ? " " + kind : "");
+  text(node, message);
+}
+
+async function api(path, options) {
+  const opts = Object.assign({ headers: { "Content-Type":"application/json" } }, options || {});
+  if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
+  const response = await fetch("/api" + path, opts);
+  let payload = null;
+  try { payload = await response.json(); } catch (_) {}
+  if (!response.ok) {
+    const detail = payload && payload.detail;
+    const message = typeof detail === "string" ? detail : (detail && detail.message) || ("HTTP " + response.status);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+function renderCounts(counts) {
+  const total = Number(counts.waiting || 0) + Number(counts.active || 0) + Number(counts.closed || 0);
+  text($("count-all"), total);
+  text($("count-waiting"), counts.waiting || 0);
+  text($("count-active"), counts.active || 0);
+  text($("count-closed"), counts.closed || 0);
+}
+
+function renderList() {
+  const list = $("tickets");
+  const previous = state.current;
+  list.replaceChildren();
+  if (!state.rows.length) {
+    const empty = document.createElement("li");
+    empty.style.cursor = "default";
+    empty.style.color = "var(--muted)";
+    text(empty, state.filter === "all" ? "暂无人工工单。用户在前台点击“申请人工处理”后会出现在这里。" : "当前筛选暂无工单。");
+    list.appendChild(empty);
+    return;
+  }
+  for (const row of state.rows) {
+    const item = document.createElement("li");
+    if (row.session_id === previous) item.classList.add("active");
+    const top = document.createElement("div"); top.className = "top";
+    const sid = document.createElement("div"); sid.className = "sid"; text(sid, row.session_id || "-");
+    top.append(sid, statusBadge(row.ticket_status));
+    const ex = document.createElement("div"); ex.className = "ex";
+    text(ex, row.last_user_excerpt ? "用户：" + row.last_user_excerpt : (row.handoff_excerpt || "尚无会话内容"));
+    const meta = document.createElement("div"); meta.className = "meta";
+    text(meta, `${row.ticket_id || "-"} · ${formatTime(row.updated_at)}${row.queued_count ? " · 待看 " + row.queued_count : ""}`);
+    item.append(top, ex, meta);
+    item.onclick = () => openTicket(row.session_id);
+    list.appendChild(item);
+  }
+}
+
+async function loadList() {
+  if (state.loadingList) return;
+  state.loadingList = true;
+  try {
+    const payload = await api(`/admin/handoff?status=${encodeURIComponent(state.filter)}`);
+    state.rows = payload.rows || [];
+    renderCounts(payload.counts || {});
+    renderList();
+    if (!state.current && state.rows.length) {
+      await openTicket(state.rows[0].session_id);
+    } else if (state.current && !state.rows.some((row) => row.session_id === state.current) && state.filter !== "all") {
+      // The selected ticket moved out of this filter; keep it open but show a hint.
+    }
+    text($("poll-state"), "已更新 " + new Date().toLocaleTimeString("zh-CN", { hour12:false }));
+  } catch (error) {
+    text($("poll-state"), "刷新失败");
+    setNotice("列表读取失败：" + error.message, "error");
+  } finally {
+    state.loadingList = false;
+  }
+}
+
+function messageNode(message) {
+  const role = String(message.role || "system");
+  const node = document.createElement("div");
+  node.className = "msg " + (["user","assistant","human","system","event","error"].includes(role) ? role : "system");
+  const who = document.createElement("span"); who.className = "who";
+  const author = message.author && (message.author.display_name || message.author.kind);
+  text(who, (ROLE_LABELS[role] || role) + (author && role === "human" ? " · " + author : "") + " · " + formatTime(message.at));
+  const body = document.createElement("div"); text(body, message.content || "");
+  node.append(who, body);
+  return node;
+}
+
+function renderDetail() {
+  const detail = state.detail;
+  const root = $("detail");
+  const oldReply = document.getElementById("reply-text");
+  const replyDraft = oldReply ? oldReply.value : "";
+  const oldClose = document.getElementById("close-note");
+  const closeDraft = oldClose ? oldClose.value : "";
+  if (!detail) {
+    root.className = "empty";
+    text(root, "左侧选择一个人工工单开始处理。");
+    return;
+  }
+  const ticket = detail.ticket || {};
+  const session = detail.session || {};
+  root.className = "";
+  const head = document.createElement("div"); head.className = "detail-head";
+  const h2 = document.createElement("h2"); text(h2, ticket.ticket_id || "无工单");
+  const sid = document.createElement("span"); sid.className = "sid"; text(sid, session.session_id || "");
+  head.append(h2, statusBadge(ticket.status), sid);
+  if (ticket.previous_ticket_ids && ticket.previous_ticket_ids.length) {
+    const prev = document.createElement("span"); prev.className = "pill";
+    text(prev, "历史工单 " + ticket.previous_ticket_ids.length + " 个");
+    head.appendChild(prev);
+  }
+
+  const toolbar = document.createElement("div"); toolbar.className = "toolbar";
+  const accept = document.createElement("button");
+  accept.type = "button"; accept.className = "primary"; accept.id = "accept"; text(accept, "接手");
+  accept.disabled = ticket.status !== "waiting";
+  accept.onclick = () => acceptTicket();
+  const refresh = document.createElement("button");
+  refresh.type = "button"; refresh.className = "ghost"; text(refresh, "刷新会话");
+  refresh.onclick = () => openTicket(state.current);
+  toolbar.append(accept, refresh);
+  head.appendChild(toolbar);
+
+  const columns = document.createElement("div"); columns.className = "columns";
+  const left = document.createElement("div"); left.className = "card";
+  const leftHead = document.createElement("h3"); text(leftHead, "会话记录");
+  const count = document.createElement("span"); count.className = "hint";
+  text(count, ` · 会话状态 ${session.status || "—"} · ${session.workflow || "—"} · ${(detail.transcript || []).length} 条`);
+  leftHead.appendChild(count);
+  const transcript = document.createElement("div"); transcript.className = "transcript";
+  const rows = detail.transcript || [];
+  if (!rows.length) { const hint = document.createElement("div"); hint.className = "hint"; text(hint, "还没有会话消息。"); transcript.appendChild(hint); }
+  for (const message of rows) transcript.appendChild(messageNode(message));
+  const queue = document.createElement("div"); queue.className = "queue";
+  const queued = detail.queued_messages || [];
+  const pendingQueue = queued.filter((item) => !item.handled).length;
+  text(queue, pendingQueue ? `人工队列中有 ${pendingQueue} 条用户新消息待回复。` : "人工队列无未看消息。");
+  left.append(leftHead, transcript, queue);
+
+  const right = document.createElement("div");
+  const summaryCard = document.createElement("div"); summaryCard.className = "card";
+  const summaryHead = document.createElement("h3"); text(summaryHead, "已有转人工摘要（只读，本地整理）");
+  const summary = document.createElement("pre"); summary.className = "summary";
+  text(summary, (detail.handoff && detail.handoff.summary) || "没有可显示的摘要。");
+  summaryCard.append(summaryHead, summary);
+  if (ticket.status === "closed" && ticket.close_note) {
+    const note = document.createElement("div"); note.className = "close-note";
+    text(note, "结案备注：" + ticket.close_note);
+    summaryCard.appendChild(note);
+  }
+
+  const replyCard = document.createElement("div"); replyCard.className = "card"; replyCard.style.marginTop = "14px";
+  const replyHead = document.createElement("h3"); text(replyHead, "人工回复（以“人工客服”身份写入会话）");
+  const replyField = document.createElement("div"); replyField.className = "field";
+  const replyLabel = document.createElement("label"); replyLabel.htmlFor = "reply-text"; text(replyLabel, ticket.status === "active" ? "回复内容" : "接手后可回复");
+  const replyArea = document.createElement("textarea"); replyArea.id = "reply-text"; replyArea.rows = 4;
+  replyArea.placeholder = "输入人工客服回复，用户前台轮询后显示为“人工客服”。";
+  replyArea.disabled = ticket.status !== "active";
+  replyField.append(replyLabel, replyArea);
+  const replyActions = document.createElement("div"); replyActions.className = "actions";
+  const send = document.createElement("button"); send.type = "button"; send.className = "primary"; send.id = "send-reply"; text(send, "发送人工回复");
+  send.disabled = ticket.status !== "active";
+  send.onclick = () => sendReply();
+  const close = document.createElement("button"); close.type = "button"; close.className = "ok"; close.id = "close-ticket"; text(close, "结案并恢复机器人");
+  close.disabled = ticket.status !== "active";
+  close.onclick = () => closeTicket();
+  replyActions.append(send, close);
+  const closeField = document.createElement("div"); closeField.className = "field";
+  const closeLabel = document.createElement("label"); closeLabel.htmlFor = "close-note"; text(closeLabel, "结案备注（可选，结案后保留）");
+  const closeArea = document.createElement("textarea"); closeArea.id = "close-note"; closeArea.rows = 2;
+  closeArea.placeholder = "例如：已电话联系用户，确认恢复；后续如有异常可重新申请人工。";
+  closeArea.disabled = ticket.status !== "active";
+  closeField.append(closeLabel, closeArea);
+  replyCard.append(replyHead, replyField, replyActions, closeField);
+
+  right.append(summaryCard, replyCard);
+  columns.append(left, right);
+  root.replaceChildren(head, columns);
+  if (replyDraft) $("reply-text").value = replyDraft;
+  if (closeDraft) $("close-note").value = closeDraft;
+  if (ticket.status === "waiting") setNotice("当前工单待处理：点击“接手”后机器人停止接管，用户新消息进入人工队列。", "");
+  else if (ticket.status === "active") setNotice("处理中：用户新消息不会调用模型；发送人工回复或结案都会写入同一会话记录。", "");
+  else if (ticket.status === "closed") setNotice("已结案：机器人入口恢复；用户可在此后重新申请人工，生成新工单。", "ok");
+}
+
+async function openTicket(sessionId) {
+  if (!sessionId || state.loadingDetail) return;
+  state.loadingDetail = true;
+  const previous = state.current;
+  state.current = sessionId;
+  try {
+    const detail = await api(`/admin/handoff/${encodeURIComponent(sessionId)}`);
+    if (state.current !== sessionId) return;
+    state.detail = detail;
+    state.replyRequestId = previous === sessionId ? state.replyRequestId : null;
+    state.closeRequestId = previous === sessionId ? state.closeRequestId : null;
+    renderDetail();
+    renderList();
+    if (detail.ticket && detail.ticket.status === "waiting") {
+      // No auto-accept: a single local agent still explicitly takes ownership.
+    }
+  } catch (error) {
+    setNotice("工单读取失败：" + error.message, "error");
+  } finally {
+    state.loadingDetail = false;
+  }
+}
+
+async function acceptTicket() {
+  if (!state.current) return;
+  try {
+    await api(`/admin/handoff/${encodeURIComponent(state.current)}/accept`, { method:"POST", body:{} });
+    setNotice("已接手，会话进入处理中。", "ok");
+    await openTicket(state.current);
+    await loadList();
+  } catch (error) {
+    setNotice("接手失败：" + error.message, "error");
+  }
+}
+
+async function sendReply() {
+  if (!state.current) return;
+  const area = $("reply-text");
+  const message = area ? area.value.trim() : "";
+  if (!message) { setNotice("人工回复不能为空。", "error"); return; }
+  if (!state.replyRequestId) state.replyRequestId = requestId();
+  const button = $("send-reply");
+  if (button) button.disabled = true;
+  try {
+    const payload = await api(`/admin/handoff/${encodeURIComponent(state.current)}/reply`, {
+      method:"POST",
+      body:{ message, request_id: state.replyRequestId }
+    });
+    setNotice(payload.duplicate ? "该回复已写入过（request_id 幂等），未重复发送。" : "人工回复已写入会话，用户前台轮询可见。", "ok");
+    state.replyRequestId = null;
+    const replyArea = $("reply-text");
+    if (replyArea) replyArea.value = "";
+    await openTicket(state.current);
+    await loadList();
+  } catch (error) {
+    setNotice("发送失败：" + error.message + "；可直接重试，request_id 会防止重复写入。", "error");
+    if (button) button.disabled = false;
+  }
+}
+
+async function closeTicket() {
+  if (!state.current) return;
+  const noteArea = $("close-note");
+  const note = noteArea ? noteArea.value.trim() : "";
+  if (!state.closeRequestId) state.closeRequestId = requestId();
+  const ok = window.confirm("确认结案并恢复机器人入口？结案后用户仍可重新申请人工。");
+  if (!ok) return;
+  const button = $("close-ticket");
+  if (button) button.disabled = true;
+  try {
+    const payload = await api(`/admin/handoff/${encodeURIComponent(state.current)}/close`, {
+      method:"POST",
+      body:{ note, request_id: state.closeRequestId }
+    });
+    setNotice(payload.duplicate ? "工单已结案（幂等请求，未重复变更）。" : "已结案，机器人入口恢复。", "ok");
+    state.closeRequestId = null;
+    await openTicket(state.current);
+    await loadList();
+  } catch (error) {
+    setNotice("结案失败：" + error.message, "error");
+    if (button) button.disabled = false;
+  }
+}
+
+function setFilter(value) {
+  state.filter = value;
+  for (const button of document.querySelectorAll("#filters button")) {
+    button.classList.toggle("active", button.dataset.status === value);
+  }
+  state.current = null;
+  state.detail = null;
+  renderDetail();
+  loadList();
+}
+
+$("filters").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-status]");
+  if (button) setFilter(button.dataset.status);
+});
+$("refresh").onclick = () => { loadList(); if (state.current) openTicket(state.current); };
+
+function editingDraft() {
+  const active = document.activeElement;
+  return Boolean(active && active.tagName === "TEXTAREA" && $("detail").contains(active));
+}
+
+function schedulePoll() {
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  state.pollTimer = setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    loadList();
+    // Do not replace the detail DOM while the local agent is typing.
+    if (state.current && !editingDraft()) openTicket(state.current);
+  }, 3000);
+}
+
+(async () => {
+  try {
+    const info = await api("/instance");
+    if (info && info.name) document.title = "人工坐席后台 · " + info.name;
+    text($("admin-mode"), "本地模式 · " + (info.host || "loopback"));
+  } catch (_) {}
+  await loadList();
+  schedulePoll();
+})();
+</script>
+</body>
+</html>

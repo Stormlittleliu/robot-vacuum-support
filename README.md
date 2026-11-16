@@ -96,6 +96,14 @@ Invoke-RestMethod http://127.0.0.1:8902/api/instance
 
 > `scripts/manage_product.py` 只管理本机固定的 `outputs/release-v1/instance-8902.json` 和冻结产物，**不是克隆后的通用入口**；干净 clone 没有该配置。GitHub 访客请使用上面的显式 `serve.py --instance-config`。
 
+## 人工后台（本机单人客服）
+
+后台入口：`http://127.0.0.1:<port>/admin.html`（同实例，无新前端框架）。
+
+工作流：前台点“申请人工处理”→ 后台“待处理”列表 → 接手 → 填写人工回复 → 用户前台轮询看到带“人工客服”标识的回复 → 填写结案备注并“结案并恢复机器人”。工单状态 `waiting / active / closed` 与会话 `active / ended` 独立；结案后用户可重新申请，生成新工单并保留旧工单摘要。打开工单期间，用户新消息只进人工队列、不调用模型；重复申请幂等，人工回复用 `request_id` 防重复，机器人忙时申请返回 409。
+
+后台只读取会话记录和现有只读转人工摘要，不上传知识原文。每个会话的工单持久化在 `handoff.json`，原子写 + 文件锁；管理 API 仅当实例绑定 `127.0.0.1 / ::1 / localhost` 时开放，`0.0.0.0` 等远程绑定直接 403（不信任 `Forwarded`，也不额外做账号系统）。管理写入要求 `application/json` 和同源 `Origin`（本机无 `Origin` 的 API 调用允许），页面文本全部按纯文本渲染。
+
 ## Demo 与案例
 
 - [Demo 台本：3 组引导场景（检索边界 / 更正 / 恢复交接）](docs/demo-walkthrough.md)
