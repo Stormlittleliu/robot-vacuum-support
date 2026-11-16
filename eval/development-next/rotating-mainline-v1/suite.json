@@ -1,0 +1,121 @@
+{
+  "schema_version": "rotating-mainline-suite/v1",
+  "suite_id": "rotating-mainline-v1",
+  "revision": "v1",
+  "created_at": "2026-11-15",
+  "cases_file": "cases.json",
+  "purpose": "复现的紧凑轮换主线验收集：一个复杂主题约占一半，本批主角为回充；其余用例覆盖全部其他知识文档。由程序验证比例、文档覆盖、去重、引用身份；不再建新评测框架。",
+  "counts": {
+    "total": 12,
+    "recharge_mainline": 6,
+    "breadth_primary_document": 6
+  },
+  "proportion": {
+    "recharge_mainline": 0.5,
+    "breadth_primary_document": 0.5,
+    "rule": "复杂主题恰好 6/12；其余 6 条各覆盖一份非回充知识文档"
+  },
+  "required_themes": [
+    "multiround_correction",
+    "local_vs_global_success",
+    "failed_outcome",
+    "hypothetical_third_party",
+    "explicit_recovery",
+    "unresolved_conversation"
+  ],
+  "required_breadth_documents": [
+    "assets/knowledge/故障排除.txt",
+    "assets/knowledge/扫地机器人100问.pdf",
+    "assets/knowledge/扫地机器人100问2.txt",
+    "assets/knowledge/扫拖一体机器人100问.txt",
+    "assets/knowledge/维护保养.txt",
+    "assets/knowledge/选购指南.txt"
+  ],
+  "documents": [
+    {
+      "path": "assets/knowledge/故障排除.txt",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "bytes": 42539,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/扫地机器人100问.pdf",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "bytes": 192676,
+      "kind": "knowledge",
+      "extraction": "pdftotext -enc UTF-8 -layout plus pypdf text view",
+      "note": "quote must be found in both extraction views after whitespace normalisation"
+    },
+    {
+      "path": "assets/knowledge/扫地机器人100问2.txt",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "bytes": 18519,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/扫拖一体机器人100问.txt",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "bytes": 21343,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/维护保养.txt",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "bytes": 24532,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/选购指南.txt",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "bytes": 22765,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    }
+  ],
+  "artifact": {
+    "artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+    "version": 4,
+    "manifest_runtime_hash": "0a266938ae74564a97a33a08a3f79637ae47e2ec8b8fdcaea24944307e9c4fb0",
+    "reuse_existing_build": true,
+    "no_new_build": true,
+    "no_runtime_prompt_judge_or_ui_change": true
+  },
+  "execution": {
+    "mode": "live_once",
+    "port": 8949,
+    "host": "127.0.0.1",
+    "concurrency": 2,
+    "max_sessions": 12,
+    "max_turns_per_session": 20,
+    "independent_session_per_case": true,
+    "no_green_retry": true,
+    "transport_retry_policy": "at most one retry for a transport error only; every attempt is recorded",
+    "existing_services_untouched": [8950, 8955, 8956]
+  },
+  "scoring": {
+    "program": "structural/evidence binding only: answer nonempty, retrieval attempted, primary-document binding for breadth, stable state subset for recharge",
+    "semantic": "focused agent inspection advisory; no new authoritative Judge run or rubric is claimed",
+    "authoritative_pass_claimed": false,
+    "not_success_rate": true,
+    "not_holdout": true
+  },
+  "human_pressure_test": {
+    "status": "not_run",
+    "note": "可选人工压测本批未开展，不阻塞本 development 验收"
+  },
+  "frozen_v1": {
+    "cases_file": "eval/datasets/v1/cases.jsonl",
+    "cases_file_sha256": "13095f203f4acf1223d1f0ae7af6585edaf579ff4dde31f9bc2bed50b4be77e3",
+    "suite_file": "eval/datasets/v1/suite.json",
+    "suite_file_sha256": "97761a3d444081f514cf3ca0699ad1f17e9cb7c09544394d12b203aa4c887bfc",
+    "split_file": "eval/datasets/v1/split.json",
+    "split_file_sha256": "9938993847cf73528f4e55063f8647a85cb858f367793916399aec0662d7d70e",
+    "audit_file": "eval/datasets/v1/audit.json",
+    "audit_file_sha256": "328f5ff8c68b93873934f24e6b8da9ce8aa42e834f166d5015592883a9c0dada",
+    "policy": "read-only; never modified; reviews and holdout untouched"
+  }
+}

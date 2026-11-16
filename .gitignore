@@ -1,0 +1,69 @@
+# --- Secrets / local environment (never commit values) ---
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+*credential*
+*credentials*
+*.pem
+*.key
+*.p12
+*.pfx
+.netrc
+.npmrc
+.pypirc
+id_rsa
+id_ed25519
+
+# --- Python / test caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.pytest-eval-tmp/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+build/
+dist/
+
+# --- Local-only model / vector index / knowledge originals ---
+# The repository publishes code, docs, tests and small evaluation fixtures only.
+# Knowledge originals are not redistributed because their redistribution rights
+# are unclear; the model and Chroma index are large local assets.
+assets/models/*
+!assets/models/README.md
+assets/rag_index/*
+!assets/rag_index/README.md
+assets/knowledge/*
+!assets/knowledge/README.md
+
+# --- Generated evidence / run sessions / manual review originals ---
+outputs/
+eval/results/
+eval/reviews/
+eval/judge_results/
+eval/runs/
+runtime/data/
+runtime/outputs/
+*.log
+*.sqlite3
+*.sqlite3-*
+*.zip
+
+# --- Local editor / OS noise ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

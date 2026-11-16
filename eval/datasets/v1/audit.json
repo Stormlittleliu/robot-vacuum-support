@@ -1,0 +1,5344 @@
+{
+  "schema_version": "robot-support-eval/v1",
+  "generated_at": "2026-11-13T03:32:38+08:00",
+  "revision": "v1.1",
+  "legacy_v0": {
+    "baseline": {
+      "file": "eval/cases/v0/recharge-start.json",
+      "sha256": "32182e0b29bd7f8d4c1caaca8278c59ea8daf502c2f3506fc2ab0841ab2cdfaa",
+      "cases": 16,
+      "modified": false
+    },
+    "quote_summary": {
+      "total": 50,
+      "exact": 50,
+      "normalized": 0,
+      "missing": 0,
+      "pdf_method": "pdftotext -enc UTF-8 -layout",
+      "note": "逐字命中不等于语义支持；引用支持仍是人工判断。"
+    },
+    "summary": {
+      "quote_accuracy": "50/50 可定位（PDF 使用 pdftotext -layout 抽取）",
+      "material_issues": 3,
+      "material_issue_ids": [
+        "rs-03-denies-not-tried",
+        "rs-09-unknown-model-price",
+        "rs-11-conflict-recharge-accuracy"
+      ],
+      "design_issues": [
+        "固定首步/顺序过细",
+        "README requirement 未分 kind",
+        "暂停等不稳定状态词",
+        "fault/setup schema 未统一"
+      ]
+    },
+    "cross_case_findings": [
+      {
+        "id": "audit-req-vs-knowledge",
+        "detail": "rs-09/rs-10 把 README 作为来源但没有 kind。README 是产品需求，不能冒充知识证据；v1 用 kind=requirement，并要求知识事实至少有 knowledge 证据。"
+      },
+      {
+        "id": "audit-clear-first",
+        "detail": "旧集多条把“清理充电座周围”写成第一或唯一建议。v1 的 family oracle 明确：清障是低风险候选之一，不是所有回充问题的固定首步。"
+      },
+      {
+        "id": "audit-90-95",
+        "detail": "rs-11 的两条引文真实，但条件不同（充电座设计支持≥95% vs 复杂环境≥90%），不应标为真冲突；v1 改为条件/出处说明，不要求二选一或合并。"
+      },
+      {
+        "id": "audit-schema",
+        "detail": "旧集缺少 family_id/category/split/origin/review/scoring；fault_injection 在顶层、setup 为字符串数组；v1 统一共享契约，并保留旧文件不改。"
+      }
+    ],
+    "cases": [
+      {
+        "id": "rs-01-direct-recharge",
+        "title": "直接询问回充失败如何排查",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 5,
+          "exact": 5,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/扫地机器人100问2.txt",
+              "status": "exact",
+              "quote_prefix": "- 清理充电座周围障碍物，保证充电座前方3米、左右1米无遮挡，将机器人放回充电座附近重启回充。"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/扫地机器人100问2.txt",
+              "status": "exact",
+              "quote_prefix": "- 检查APP是否关闭“自动回充”功能，确认地图中充电座位置未被修改，清理机器人回充传感器灰尘。"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "25. 每周清理充电座红外感应区，用干布擦拭，避免灰尘影响回充信号接收。"
+            },
+            {
+              "index": 5,
+              "file": "assets/knowledge/扫地机器人100问.pdf",
+              "status": "exact",
+              "quote_prefix": "- 充电座位置变动、前方有障碍物或红外传感器脏污。"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "expected_over_specification",
+            "detail": "五项 facts 把清障、传感器、APP 设置写成较固定的排查顺序；behavior 要求先给顺序再询问，但证据中没有把该顺序标为产品需求。",
+            "fix_refs": [
+              "rsv1-dev-direct-recharge-triage-01",
+              "rsv1-dev-direct-recharge-triage-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-02-after-cleared-and-wiped",
+        "title": "已清障并擦拭触点后仍然失败",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 4,
+          "exact": 4,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "55. 故障现象：充电座指示灯不亮，无法供电；检测：电源线是否插紧，充电座是否损坏，插座是否通电；修复：重新插拔电源线，"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "9. 避免自行拆解机器人内部零件（如电机、主板、电池），故障后联系官方售后维修。"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "low",
+            "type": "unsourced_service_inference",
+            "detail": "第91条只写检测回充传感器/充电座信号，没有直接写“联系官方售后”；这是安全设计推断，应明确标注为行为要求。",
+            "fix_refs": [
+              "rsv1-dev-multi-recharge-tried-advance-01"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-03-denies-not-tried",
+        "title": "用户否定，明确说清障和擦触点都没试过",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 6,
+          "exact": 6,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "25. 每周清理充电座红外感应区，用干布擦拭，避免灰尘影响回充信号接收。"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/扫地机器人100问2.txt",
+              "status": "exact",
+              "quote_prefix": "- 清理充电座周围障碍物，保证充电座前方3米、左右1米无遮挡，将机器人放回充电座附近重启回充。"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/扫地机器人100问2.txt",
+              "status": "exact",
+              "quote_prefix": "- 检查APP是否关闭“自动回充”功能，确认地图中充电座位置未被修改，清理机器人回充传感器灰尘。"
+            },
+            {
+              "index": 5,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "24. 每日检查充电座摆放是否平整，周围无杂物遮挡，保证机器人回充顺畅。"
+            },
+            {
+              "index": 6,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            }
+          ]
+        },
+        "factual_support": "supported_but_semantics_wrong",
+        "issues": [
+          {
+            "severity": "high",
+            "type": "negation_recorded_as_tried",
+            "detail": "behavior 写“把否定信息作为已试状态的一部分”，但用户明确说没试过；正确语义是 not_tried，不能记成 tried。该错误会直接污染状态。",
+            "fix_refs": [
+              "rsv1-dev-multi-recharge-negation-01",
+              "rsv1-dev-multi-recharge-negation-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-04-still-bad-no-context",
+        "title": "只说“还是不行”，缺少现象和已试步骤",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 4,
+          "exact": 4,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "118. 故障现象：机器人无法识别充电座，碰撞充电座；检测：充电座是否摆放平整，回充传感器是否故障；修复：调整充电座位置"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "55. 故障现象：充电座指示灯不亮，无法供电；检测：电源线是否插紧，充电座是否损坏，插座是否通电；修复：重新插拔电源线，"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "over_specified_followup",
+            "detail": "把“充电座指示灯/是否手动放回”写成示例追问，容易被当作唯一问题组；缺信息时应允许其他等价澄清。",
+            "fix_refs": [
+              "rsv1-dev-boundary-missing-context-01",
+              "rsv1-dev-boundary-missing-context-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-05-success-close",
+        "title": "清理后已成功回充，用户结案",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 4,
+          "exact": 4,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "24. 每日检查充电座摆放是否平整，周围无杂物遮挡，保证机器人回充顺畅。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "25. 每周清理充电座红外感应区，用干布擦拭，避免灰尘影响回充信号接收。"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "19. 机器人回充时，保证充电座周围无遮挡，避免机器人反复尝试回充导致电机、电池损耗。"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            }
+          ]
+        },
+        "factual_support": "supported",
+        "issues": [
+          {
+            "severity": "low",
+            "type": "closure_requirement_not_linked",
+            "detail": "结案行为本身合理，但旧 schema 没有区分“自动回充恢复”和“手动放回能充电”；该假结案风险在 v1 被显式覆盖。",
+            "fix_refs": [
+              "rsv1-dev-multi-recharge-closure-01",
+              "rsv1-dev-multi-recharge-closure-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-06-switch-topic-mop-water",
+        "title": "回充话题中切换到拖地不出水",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 3,
+          "exact": 3,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "16. 故障现象：拖地不出水；检测：水箱是否有水，出水量是否调至最低，出水管是否堵塞；修复：加注清水，调高出水量，用牙签"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "9. 避免自行拆解机器人内部零件（如电机、主板、电池），故障后联系官方售后维修。"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "unstable_state_key",
+            "detail": "写“旧回充任务保留为暂停/未解决”，但“暂停”不是当前稳定公共状态值；v1 只用 active/resolved，避免把实现词写进 rubric。",
+            "fix_refs": [
+              "rsv1-dev-multi-topic-switch-mop-01",
+              "rsv1-dev-multi-topic-switch-mop-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-07-user-correction",
+        "title": "用户更正：触点其实没擦",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 2,
+          "exact": 2,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "low",
+            "type": "correction_rule_uncited",
+            "detail": "“以最后一次明确更正为准”是产品行为要求，旧 sources 没有对应的 requirement 证据；v1 将行为要求与知识事实分开。",
+            "fix_refs": [
+              "rsv1-dev-multi-recharge-correction-01",
+              "rsv1-dev-multi-recharge-correction-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-08-recall-tried-steps",
+        "title": "用户询问刚才试过什么",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 3,
+          "exact": 3,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "55. 故障现象：充电座指示灯不亮，无法供电；检测：电源线是否插紧，充电座是否损坏，插座是否通电；修复：重新插拔电源线，"
+            }
+          ]
+        },
+        "factual_support": "supported",
+        "issues": [],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-09-unknown-model-price",
+        "title": "未知型号 Galaxy X99 的价格和保修",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 2,
+          "exact": 2,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "README.md",
+              "status": "exact",
+              "quote_prefix": "只读取本工程 `assets/knowledge/` 里的 6 份扫地/扫拖机器人资料，不包含服装资料。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/扫地机器人100问2.txt",
+              "status": "exact",
+              "quote_prefix": "- 查看机器人产品说明书、购买发票，或在APP中进入【设备信息】查看保修时间，一般整机保修1-2年，电池保修6个月。"
+            }
+          ]
+        },
+        "factual_support": "partly_supported_absence_unproven",
+        "issues": [
+          {
+            "severity": "high",
+            "type": "requirement_used_as_knowledge_and_absence_unproven",
+            "detail": "README 的“只含6份资料”被当作价格缺失的证据，但它是 requirement，不是知识事实；旧集也没有全文覆盖检查，未区分“一次 top-k 未命中”和“语料确实没有 X99”。",
+            "fix_refs": [
+              "rsv1-dev-boundary-unknown-model-price-01",
+              "rsv1-dev-boundary-unknown-model-price-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-10-out-of-domain-dress",
+        "title": "服装搭配请求，不跨域回答",
+        "check_mode": "human",
+        "quote_check": {
+          "total": 1,
+          "exact": 1,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "README.md",
+              "status": "exact",
+              "quote_prefix": "只读取本工程 `assets/knowledge/` 里的 6 份扫地/扫拖机器人资料，不包含服装资料。"
+            }
+          ]
+        },
+        "factual_support": "supported_requirement_only",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "evidence_kind_missing",
+            "detail": "README 引用准确且足以支持“不提供服装建议”，但旧 schema 没有 kind，无法阻止 requirement 被当作知识证据；v1 标为 requirement。",
+            "fix_refs": [
+              "rsv1-dev-boundary-out-of-domain-01",
+              "rsv1-dev-boundary-out-of-domain-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-11-conflict-recharge-accuracy",
+        "title": "资料对回充精准度说法冲突",
+        "check_mode": "human",
+        "quote_check": {
+          "total": 2,
+          "exact": 2,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/选购指南.txt",
+              "status": "exact",
+              "quote_prefix": "36. 充电座设计：充电触点带防氧化涂层，防滑底座避免移位，支持自动回充精准度≥95%。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/选购指南.txt",
+              "status": "exact",
+              "quote_prefix": "84. 回充精准度：在复杂环境下回充精准度≥90%，避免找不到充电座导致电量耗尽。"
+            }
+          ]
+        },
+        "factual_support": "quotes_supported_but_conflict_label_wrong",
+        "issues": [
+          {
+            "severity": "high",
+            "type": "false_conflict",
+            "detail": "两处引文都真实，但 #36 是“充电座设计/支持自动回充精准度≥95%”，#84 是“复杂环境下回充精准度≥90%”；条件/语境不同，不是同对象同条件的矛盾，不能要求模型同时呈现为“资料冲突”。",
+            "fix_refs": [
+              "rsv1-dev-ambiguity-recharge-condition-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-12-network-timeout",
+        "title": "检索/生成网络超时（故障注入）",
+        "check_mode": "fault-injection",
+        "quote_check": {
+          "total": 0,
+          "exact": 0,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": []
+        },
+        "factual_support": "intentional_no_sources",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "fault_schema_and_denominator",
+            "detail": "超时语义合理，但旧用例把 fault_injection 放在顶层、没有 setup.kind 和“不混 QA 分母”标记；v1 统一为 setup.kind=fault_injection 并单列分母。",
+            "fix_refs": [
+              "rsv1-dev-fault-process-restart-01",
+              "rsv1-hold-fault-empty-retrieval-01"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-13-session-resume-isolation",
+        "title": "会话恢复保留状态，新会话隔离",
+        "check_mode": "integration",
+        "quote_check": {
+          "total": 2,
+          "exact": 2,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "setup_schema",
+            "detail": "setup 是字符串数组，重启/恢复没有被标成故障注入，也没有 steps 结构；v1 使用 setup.kind=fault_injection/fault=process_restart。",
+            "fix_refs": [
+              "rsv1-dev-fault-process-restart-01",
+              "rsv1-dev-fault-process-restart-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-14-duplicate-request-idempotent",
+        "title": "同一 request 重复提交不重复事实",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 2,
+          "exact": 2,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/扫地机器人100问2.txt",
+              "status": "exact",
+              "quote_prefix": "- 清理充电座周围障碍物，保证充电座前方3米、左右1米无遮挡，将机器人放回充电座附近重启回充。"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "low",
+            "type": "internal_state_binding",
+            "detail": "“状态中不产生重复的已建议步骤记录”是内部实现断言，无法由用户可见语义单独验证；v1 未把幂等内部计数作为新 case 的 oracle。",
+            "fix_refs": []
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-15-dangerous-diy-repair",
+        "title": "用户想自行拆机打磨触点或换主板",
+        "check_mode": "human",
+        "quote_check": {
+          "total": 5,
+          "exact": 5,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "9. 避免自行拆解机器人内部零件（如电机、主板、电池），故障后联系官方售后维修。"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "25. 每周清理充电座红外感应区，用干布擦拭，避免灰尘影响回充信号接收。"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/扫拖一体机器人100问.txt",
+              "status": "exact",
+              "quote_prefix": "- 维修费用根据故障部件而定，拖布电机、水泵等核心部件费用稍高，滤网、卡扣等小配件费用较低，建议选择官方售后维修，保证配"
+            },
+            {
+              "index": 5,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "55. 故障现象：充电座指示灯不亮，无法供电；检测：电源线是否插紧，充电座是否损坏，插座是否通电；修复：重新插拔电源线，"
+            }
+          ]
+        },
+        "factual_support": "mostly_supported_one_uncited_prohibition",
+        "issues": [
+          {
+            "severity": "medium",
+            "type": "uncited_original_cord_prohibition",
+            "detail": "“不要建议用非原装电源线”在维护保养耗材第28条有依据，但旧 sources 没有列该条；引用清单不完整。",
+            "fix_refs": [
+              "rsv1-hold-direct-charge-heat-01"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      },
+      {
+        "id": "rs-16-false-premise-mainboard",
+        "title": "已换充电座仍失败，用户自判主板坏了",
+        "check_mode": "auto-assisted",
+        "quote_check": {
+          "total": 5,
+          "exact": 5,
+          "normalized": 0,
+          "missing": 0,
+          "status": "pass",
+          "results": [
+            {
+              "index": 1,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，"
+            },
+            {
+              "index": 2,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清"
+            },
+            {
+              "index": 3,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "118. 故障现象：机器人无法识别充电座，碰撞充电座；检测：充电座是否摆放平整，回充传感器是否故障；修复：调整充电座位置"
+            },
+            {
+              "index": 4,
+              "file": "assets/knowledge/维护保养.txt",
+              "status": "exact",
+              "quote_prefix": "9. 避免自行拆解机器人内部零件（如电机、主板、电池），故障后联系官方售后维修。"
+            },
+            {
+              "index": 5,
+              "file": "assets/knowledge/故障排除.txt",
+              "status": "exact",
+              "quote_prefix": "55. 故障现象：充电座指示灯不亮，无法供电；检测：电源线是否插紧，充电座是否损坏，插座是否通电；修复：重新插拔电源线，"
+            }
+          ]
+        },
+        "factual_support": "supported_with_design_inference",
+        "issues": [
+          {
+            "severity": "low",
+            "type": "unsourced_official_service_inference",
+            "detail": "“建议官方售后”是安全行为要求，资料第91条只写检测传感器/信号；应在 rubric 中区分事实与安全要求。",
+            "fix_refs": [
+              "rsv1-dev-multi-recharge-closure-02",
+              "rsv1-hold-multi-docking-alignment-02"
+            ]
+          }
+        ],
+        "verdict": "keep_v0_unchanged_dev_only"
+      }
+    ]
+  },
+  "v1_validation": {
+    "ok": true,
+    "checked_at": "2026-11-12T19:32:38+00:00",
+    "dataset": "eval/datasets/v1",
+    "counts": {
+      "total": 48,
+      "development": 32,
+      "holdout": 16,
+      "families": 24,
+      "categories": {
+        "direct_qa": 12,
+        "negation_correction_ambiguity": 8,
+        "multi_turn": 16,
+        "missing_or_out_of_domain": 8,
+        "fault_recovery": 4
+      },
+      "evidence_rows": 252
+    },
+    "hashes": {
+      "cases_sha256": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94",
+      "holdout_cases_sha256": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1",
+      "suite_sha256": "97761a3d444081f514cf3ca0699ad1f17e9cb7c09544394d12b203aa4c887bfc",
+      "split_sha256": "9938993847cf73528f4e55063f8647a85cb858f367793916399aec0662d7d70e",
+      "cases_file_sha256": "13095f203f4acf1223d1f0ae7af6585edaf579ff4dde31f9bc2bed50b4be77e3"
+    },
+    "quotes": {
+      "exact": 250,
+      "normalized": 2,
+      "missing": []
+    },
+    "duplicates": {
+      "exact": [],
+      "near": []
+    },
+    "checks": [
+      {
+        "id": "file:suite.json",
+        "ok": true,
+        "detail": "eval\\datasets\\v1\\suite.json"
+      },
+      {
+        "id": "file:cases.jsonl",
+        "ok": true,
+        "detail": "eval\\datasets\\v1\\cases.jsonl"
+      },
+      {
+        "id": "file:split.json",
+        "ok": true,
+        "detail": "eval\\datasets\\v1\\split.json"
+      },
+      {
+        "id": "file:evidence_index.json",
+        "ok": true,
+        "detail": "eval\\datasets\\v1\\evidence_index.json"
+      },
+      {
+        "id": "file:review-todo.csv",
+        "ok": true,
+        "detail": "eval\\datasets\\v1\\review-todo.csv"
+      },
+      {
+        "id": "suite.schema_version",
+        "ok": true,
+        "detail": "robot-support-eval/v1"
+      },
+      {
+        "id": "suite.suite_id",
+        "ok": true,
+        "detail": "robot-support-v1"
+      },
+      {
+        "id": "suite.cases_file",
+        "ok": true,
+        "detail": "cases.jsonl"
+      },
+      {
+        "id": "suite.split_file",
+        "ok": true,
+        "detail": "split.json"
+      },
+      {
+        "id": "suite.review_status",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "suite.counts",
+        "ok": true,
+        "detail": "{\"development\": 32, \"holdout\": 16}"
+      },
+      {
+        "id": "cases.jsonl.parse",
+        "ok": true,
+        "detail": "all lines parse"
+      },
+      {
+        "id": "cases.total",
+        "ok": true,
+        "detail": "48 cases"
+      },
+      {
+        "id": "cases.unique_ids",
+        "ok": true,
+        "detail": "48 ids, 48 unique"
+      },
+      {
+        "id": "cases.split_counts",
+        "ok": true,
+        "detail": "{'development': 32, 'holdout': 16}"
+      },
+      {
+        "id": "cases.category_counts",
+        "ok": true,
+        "detail": "{\"direct_qa\": 12, \"negation_correction_ambiguity\": 8, \"multi_turn\": 16, \"missing_or_out_of_domain\": 8, \"fault_recovery\": 4}"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "case.fields:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "required top-level fields"
+      },
+      {
+        "id": "families.count",
+        "ok": true,
+        "detail": "24 families"
+      },
+      {
+        "id": "families.variant_budget",
+        "ok": true,
+        "detail": "2 cases/family"
+      },
+      {
+        "id": "family.split:fam-dev-direct-suction-decline",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-direct-suction-decline",
+        "ok": true,
+        "detail": "{'direct_qa'}"
+      },
+      {
+        "id": "family.split:fam-dev-negation-filter-not-cleaned",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-negation-filter-not-cleaned",
+        "ok": true,
+        "detail": "{'negation_correction_ambiguity'}"
+      },
+      {
+        "id": "family.split:fam-dev-multi-topic-switch-mop",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-multi-topic-switch-mop",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-dev-multi-recharge-closure",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-multi-recharge-closure",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-dev-ambiguity-recharge-condition",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-ambiguity-recharge-condition",
+        "ok": true,
+        "detail": "{'negation_correction_ambiguity'}"
+      },
+      {
+        "id": "family.split:fam-dev-boundary-out-of-domain",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-boundary-out-of-domain",
+        "ok": true,
+        "detail": "{'missing_or_out_of_domain'}"
+      },
+      {
+        "id": "family.split:fam-dev-direct-base-power",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-direct-base-power",
+        "ok": true,
+        "detail": "{'direct_qa'}"
+      },
+      {
+        "id": "family.split:fam-dev-multi-recharge-tried-advance",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-multi-recharge-tried-advance",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-dev-multi-recharge-correction",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-multi-recharge-correction",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-dev-multi-recharge-negation",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-multi-recharge-negation",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-dev-boundary-unknown-model-price",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-boundary-unknown-model-price",
+        "ok": true,
+        "detail": "{'missing_or_out_of_domain'}"
+      },
+      {
+        "id": "family.split:fam-dev-correction-mop-water-level",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-correction-mop-water-level",
+        "ok": true,
+        "detail": "{'negation_correction_ambiguity'}"
+      },
+      {
+        "id": "family.split:fam-dev-boundary-missing-context",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-boundary-missing-context",
+        "ok": true,
+        "detail": "{'missing_or_out_of_domain'}"
+      },
+      {
+        "id": "family.split:fam-dev-direct-recharge-triage",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-direct-recharge-triage",
+        "ok": true,
+        "detail": "{'direct_qa'}"
+      },
+      {
+        "id": "family.split:fam-dev-direct-mop-no-water",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-direct-mop-no-water",
+        "ok": true,
+        "detail": "{'direct_qa'}"
+      },
+      {
+        "id": "family.split:fam-dev-fault-process-restart",
+        "ok": true,
+        "detail": "{'development'}"
+      },
+      {
+        "id": "family.category:fam-dev-fault-process-restart",
+        "ok": true,
+        "detail": "{'fault_recovery'}"
+      },
+      {
+        "id": "family.split:fam-hold-boundary-renovation-debris",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-boundary-renovation-debris",
+        "ok": true,
+        "detail": "{'missing_or_out_of_domain'}"
+      },
+      {
+        "id": "family.split:fam-hold-fault-empty-retrieval",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-fault-empty-retrieval",
+        "ok": true,
+        "detail": "{'fault_recovery'}"
+      },
+      {
+        "id": "family.split:fam-hold-direct-edge-brush-wear",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-direct-edge-brush-wear",
+        "ok": true,
+        "detail": "{'direct_qa'}"
+      },
+      {
+        "id": "family.split:fam-hold-direct-charge-heat",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-direct-charge-heat",
+        "ok": true,
+        "detail": "{'direct_qa'}"
+      },
+      {
+        "id": "family.split:fam-hold-multi-docking-alignment",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-multi-docking-alignment",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-hold-negation-battery-vs-base",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-negation-battery-vs-base",
+        "ok": true,
+        "detail": "{'negation_correction_ambiguity'}"
+      },
+      {
+        "id": "family.split:fam-hold-multi-switch-to-suction",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-multi-switch-to-suction",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "family.split:fam-hold-multi-base-moved-remap",
+        "ok": true,
+        "detail": "{'holdout'}"
+      },
+      {
+        "id": "family.category:fam-hold-multi-base-moved-remap",
+        "ok": true,
+        "detail": "{'multi_turn'}"
+      },
+      {
+        "id": "families.split_disjoint",
+        "ok": true,
+        "detail": "no family crosses splits"
+      },
+      {
+        "id": "split.case_ids_cover",
+        "ok": true,
+        "detail": "dev=32 holdout=16"
+      },
+      {
+        "id": "split.development_families",
+        "ok": true,
+        "detail": "family groups match"
+      },
+      {
+        "id": "split.holdout_families",
+        "ok": true,
+        "detail": "family groups match"
+      },
+      {
+        "id": "hash.holdout",
+        "ok": true,
+        "detail": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1"
+      },
+      {
+        "id": "hash.cases",
+        "ok": true,
+        "detail": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94"
+      },
+      {
+        "id": "hash.split_holdout",
+        "ok": true,
+        "detail": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1"
+      },
+      {
+        "id": "holdout.no_seed_rewrites",
+        "ok": true,
+        "detail": "holdout seed_ids must be empty"
+      },
+      {
+        "id": "source.doc:assets/knowledge/故障排除.txt",
+        "ok": true,
+        "detail": "assets/knowledge/故障排除.txt"
+      },
+      {
+        "id": "source.doc:assets/knowledge/扫地机器人100问.pdf",
+        "ok": true,
+        "detail": "assets/knowledge/扫地机器人100问.pdf"
+      },
+      {
+        "id": "source.doc:assets/knowledge/扫地机器人100问2.txt",
+        "ok": true,
+        "detail": "assets/knowledge/扫地机器人100问2.txt"
+      },
+      {
+        "id": "source.doc:assets/knowledge/扫拖一体机器人100问.txt",
+        "ok": true,
+        "detail": "assets/knowledge/扫拖一体机器人100问.txt"
+      },
+      {
+        "id": "source.doc:assets/knowledge/维护保养.txt",
+        "ok": true,
+        "detail": "assets/knowledge/维护保养.txt"
+      },
+      {
+        "id": "source.doc:assets/knowledge/选购指南.txt",
+        "ok": true,
+        "detail": "assets/knowledge/选购指南.txt"
+      },
+      {
+        "id": "source.doc:README.md",
+        "ok": true,
+        "detail": "README.md"
+      },
+      {
+        "id": "source.doc_count",
+        "ok": true,
+        "detail": "7 docs"
+      },
+      {
+        "id": "evidence.index_docs",
+        "ok": true,
+        "detail": "7 docs"
+      },
+      {
+        "id": "evidence.quote_exact_or_normalized",
+        "ok": true,
+        "detail": "exact=250, normalized=2"
+      },
+      {
+        "id": "evidence.file_sha256",
+        "ok": true,
+        "detail": "252 evidence rows"
+      },
+      {
+        "id": "evidence.kind_mix",
+        "ok": true,
+        "detail": "at least one knowledge anchor"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-suction-decline-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-suction-decline-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-suction-decline-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-negation-filter-not-cleaned-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-negation-filter-not-cleaned-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-negation-filter-not-cleaned-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-negation-filter-not-cleaned-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-negation-filter-not-cleaned-01#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-negation-filter-not-cleaned-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-topic-switch-mop-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-topic-switch-mop-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-topic-switch-mop-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-topic-switch-mop-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-06-switch-topic-mop-water']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-topic-switch-mop-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-closure-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-closure-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-closure-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-closure-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-closure-02#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-05-success-close', 'rs-16-false-premise-mainboard']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-closure-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-ambiguity-recharge-condition-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-ambiguity-recharge-condition-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-ambiguity-recharge-condition-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-out-of-domain-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-out-of-domain-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-10-out-of-domain-dress']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-boundary-out-of-domain-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-ambiguity-recharge-condition-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-ambiguity-recharge-condition-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-11-conflict-recharge-accuracy']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-ambiguity-recharge-condition-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-base-power-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-base-power-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-02-after-cleared-and-wiped']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-base-power-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-tried-advance-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-tried-advance-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-tried-advance-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-tried-advance-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-tried-advance-01#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-02-after-cleared-and-wiped']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-tried-advance-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-correction-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-correction-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-correction-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-correction-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-correction-02#3",
+        "ok": true,
+        "detail": "actual=['replace_dock'] expected=['replace_dock']"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-07-user-correction']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-correction-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-negation-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-negation-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-negation-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-negation-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-negation-01#3",
+        "ok": true,
+        "detail": "actual=['clear_dock_obstacles', 'clean_contacts'] expected=['clear_dock_obstacles', 'clean_contacts']"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-03-denies-not-tried']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-negation-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-unknown-model-price-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-unknown-model-price-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-09-unknown-model-price']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-boundary-unknown-model-price-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-base-power-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-base-power-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-02-after-cleared-and-wiped']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-base-power-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-correction-mop-water-level-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-correction-mop-water-level-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-correction-mop-water-level-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-correction-mop-water-level-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-correction-mop-water-level-02#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-correction-mop-water-level-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-unknown-model-price-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-unknown-model-price-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-09-unknown-model-price']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-boundary-unknown-model-price-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-tried-advance-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-tried-advance-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-tried-advance-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-tried-advance-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-tried-advance-02#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-02-after-cleared-and-wiped']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-tried-advance-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-missing-context-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-missing-context-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-missing-context-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-missing-context-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-04-still-bad-no-context']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-boundary-missing-context-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-negation-filter-not-cleaned-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-negation-filter-not-cleaned-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-negation-filter-not-cleaned-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-negation-filter-not-cleaned-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-negation-filter-not-cleaned-02#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-negation-filter-not-cleaned-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-correction-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-correction-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-correction-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-correction-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-correction-01#3",
+        "ok": true,
+        "detail": "actual=['clean_contacts'] expected=['clean_contacts']"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-07-user-correction']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-correction-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-recharge-triage-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-recharge-triage-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-01-direct-recharge']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-recharge-triage-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-mop-no-water-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-mop-no-water-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-06-switch-topic-mop-water']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-mop-no-water-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-missing-context-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-missing-context-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-missing-context-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-missing-context-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-04-still-bad-no-context']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-boundary-missing-context-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-topic-switch-mop-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-topic-switch-mop-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-topic-switch-mop-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-topic-switch-mop-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-06-switch-topic-mop-water']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-topic-switch-mop-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-mop-no-water-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-mop-no-water-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-06-switch-topic-mop-water']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-mop-no-water-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-closure-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-closure-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-closure-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-closure-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-closure-01#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-05-success-close']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-closure-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-fault-process-restart-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-fault-process-restart-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-fault-process-restart-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-fault-process-restart-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-fault-process-restart-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-fault-process-restart-01#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-13-session-resume-isolation'], 'injection': 'synthetic_fault_injection'}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "fault_injection"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.setup:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "{'kind': 'fault_injection', 'fault': 'process_restart', 'steps': ['创建会话A并发送回充失败与已试步骤。', '重启worker/服务进程，保留会话存储。', '用同一session_id恢复会话A并追问已试步骤。', '创建新会话B并追问已试步骤。']}"
+      },
+      {
+        "id": "fault.injection_label:rsv1-dev-fault-process-restart-01",
+        "ok": true,
+        "detail": "synthetic_fault_injection"
+      },
+      {
+        "id": "turn.role:rsv1-dev-correction-mop-water-level-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-correction-mop-water-level-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-correction-mop-water-level-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-correction-mop-water-level-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-correction-mop-water-level-01#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-correction-mop-water-level-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-fault-process-restart-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-fault-process-restart-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-fault-process-restart-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-fault-process-restart-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-fault-process-restart-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-fault-process-restart-02#3",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-13-session-resume-isolation'], 'injection': 'synthetic_fault_injection'}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "fault_injection"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.setup:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "{'kind': 'fault_injection', 'fault': 'process_restart', 'steps': ['创建会话A并记录回充失败与换插座。', '重启worker/服务进程。', '同一session_id恢复并追问进度。', '创建新会话B验证隔离。']}"
+      },
+      {
+        "id": "fault.injection_label:rsv1-dev-fault-process-restart-02",
+        "ok": true,
+        "detail": "synthetic_fault_injection"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-suction-decline-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-suction-decline-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-suction-decline-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-boundary-out-of-domain-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-boundary-out-of-domain-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-10-out-of-domain-dress']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-boundary-out-of-domain-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-direct-recharge-triage-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-direct-recharge-triage-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-01-direct-recharge']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-direct-recharge-triage-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-negation-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-negation-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-negation-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-dev-multi-recharge-negation-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-dev-multi-recharge-negation-02#3",
+        "ok": true,
+        "detail": "actual=['clear_dock_obstacles'] expected=['clear_dock_obstacles']"
+      },
+      {
+        "id": "review.pending:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': ['rs-03-denies-not-tried']}"
+      },
+      {
+        "id": "scoring.lists:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-dev-multi-recharge-negation-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-boundary-renovation-debris-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-boundary-renovation-debris-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-boundary-renovation-debris-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-fault-empty-retrieval-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-fault-empty-retrieval-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-fault-empty-retrieval-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-fault-empty-retrieval-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': [], 'injection': 'synthetic_fault_injection'}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "fault_injection"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.setup:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "{'kind': 'fault_injection', 'fault': 'empty_retrieval', 'steps': ['对“拖地不出水”查询注入一次空检索结果。', '保留用户问题与已试事实。', '重试检索并返回真实命中。', '记录空结果与重试结果。']}"
+      },
+      {
+        "id": "fault.injection_label:rsv1-hold-fault-empty-retrieval-01",
+        "ok": true,
+        "detail": "synthetic_fault_injection"
+      },
+      {
+        "id": "turn.role:rsv1-hold-boundary-renovation-debris-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-boundary-renovation-debris-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-boundary-renovation-debris-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-direct-edge-brush-wear-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-direct-edge-brush-wear-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-direct-edge-brush-wear-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-direct-charge-heat-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-direct-charge-heat-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-direct-charge-heat-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-docking-alignment-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-docking-alignment-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-docking-alignment-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-docking-alignment-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-multi-docking-alignment-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-negation-battery-vs-base-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-negation-battery-vs-base-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-negation-battery-vs-base-02#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-hold-negation-battery-vs-base-02#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-negation-battery-vs-base-02#3",
+        "ok": true,
+        "detail": "actual=['replace_dock'] expected=['replace_dock']"
+      },
+      {
+        "id": "review.pending:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-negation-battery-vs-base-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-docking-alignment-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-docking-alignment-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-docking-alignment-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-docking-alignment-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-multi-docking-alignment-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-fault-empty-retrieval-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-fault-empty-retrieval-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-fault-empty-retrieval-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-fault-empty-retrieval-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': [], 'injection': 'synthetic_fault_injection'}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "fault_injection"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.setup:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "{'kind': 'fault_injection', 'fault': 'empty_retrieval', 'steps': ['对“回充失败/灯不亮”查询注入一次空检索结果。', '保留用户问题。', '重试检索并返回真实命中。', '记录空结果与重试结果。']}"
+      },
+      {
+        "id": "fault.injection_label:rsv1-hold-fault-empty-retrieval-02",
+        "ok": true,
+        "detail": "synthetic_fault_injection"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-switch-to-suction-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-switch-to-suction-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-switch-to-suction-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-switch-to-suction-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-multi-switch-to-suction-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-switch-to-suction-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-switch-to-suction-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-switch-to-suction-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-switch-to-suction-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-multi-switch-to-suction-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-base-moved-remap-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-base-moved-remap-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-base-moved-remap-02#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-base-moved-remap-02#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-multi-base-moved-remap-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-direct-charge-heat-02#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-direct-charge-heat-02#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-direct-charge-heat-02",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-direct-edge-brush-wear-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-direct-edge-brush-wear-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.answer_only_empty:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "all state must be empty"
+      },
+      {
+        "id": "state.score_na:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "planned_out_of_scope_current_p1/not_applicable_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-direct-edge-brush-wear-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-negation-battery-vs-base-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-negation-battery-vs-base-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-negation-battery-vs-base-01#2",
+        "ok": true,
+        "detail": "assistant_fixture"
+      },
+      {
+        "id": "turn.role:rsv1-hold-negation-battery-vs-base-01#3",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-negation-battery-vs-base-01#3",
+        "ok": true,
+        "detail": "actual=['replace_battery'] expected=['replace_battery']"
+      },
+      {
+        "id": "review.pending:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-negation-battery-vs-base-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-base-moved-remap-01#1",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-base-moved-remap-01#1",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "turn.role:rsv1-hold-multi-base-moved-remap-01#2",
+        "ok": true,
+        "detail": "user"
+      },
+      {
+        "id": "state.not_tried_explicit:rsv1-hold-multi-base-moved-remap-01#2",
+        "ok": true,
+        "detail": "actual=[] expected=[]"
+      },
+      {
+        "id": "review.pending:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "pending_human"
+      },
+      {
+        "id": "origin.synthetic:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "{'kind': 'synthetic', 'seed_ids': []}"
+      },
+      {
+        "id": "scoring.lists:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "automatic/human non-empty"
+      },
+      {
+        "id": "scoring.expected_sources_mode:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "any_of"
+      },
+      {
+        "id": "scoring.denominator:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "qa"
+      },
+      {
+        "id": "state.score_current:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "current_p1_recharge_state/included_current_p1"
+      },
+      {
+        "id": "fault.not_mixed:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "fault.no_injection_label:rsv1-hold-multi-base-moved-remap-01",
+        "ok": true,
+        "detail": "None"
+      },
+      {
+        "id": "duplicates.exact",
+        "ok": true,
+        "detail": "[]"
+      },
+      {
+        "id": "duplicates.near_reviewed",
+        "ok": true,
+        "detail": "0 pairs >=0.90 (warning only)"
+      },
+      {
+        "id": "review.todo_covers_cases",
+        "ok": true,
+        "detail": "48 rows"
+      },
+      {
+        "id": "review.todo_pending",
+        "ok": true,
+        "detail": "all pending_human"
+      }
+    ],
+    "warnings": [],
+    "errors": [],
+    "semantic_support": "pending_human (validator only checks quote/hash/structure, not whether an answer is semantically supported)"
+  },
+  "revision_history": [
+    {
+      "revision": "v1.0",
+      "status": "superseded",
+      "cases_sha256": "e766dda85854da9f90ffa24889139b40669b8eec04baf5531015330b87a2bf4f",
+      "holdout_cases_sha256": "558918e7dca2c5854428b18c6add6315a30c585b79419a1e13099ea8124f269e",
+      "reason": "Initial v1 build; superseded after the data review corrected non-recharge state overreach, not_tried overreach, and expected_sources semantics."
+    },
+    {
+      "revision": "v1.1",
+      "status": "current",
+      "cases_sha256": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94",
+      "holdout_cases_sha256": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1",
+      "reason": "Data-only oracle correction; no product/runtime/scorer change, no holdout execution, holdout re-frozen under the new hash."
+    }
+  ],
+  "oracle_corrections": {
+    "previous_revision": "v1.0",
+    "previous_cases_sha256": "e766dda85854da9f90ffa24889139b40669b8eec04baf5531015330b87a2bf4f",
+    "previous_holdout_cases_sha256": "558918e7dca2c5854428b18c6add6315a30c585b79419a1e13099ea8124f269e",
+    "current_cases_sha256": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94",
+    "current_holdout_cases_sha256": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1",
+    "source": "state_policy.py (applied after seed expansion)",
+    "items": [
+      {
+        "case_id": "rsv1-dev-direct-recharge-triage-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clear_dock_obstacles",
+          "clean_sensors",
+          "check_power",
+          "check_auto_return"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-direct-recharge-triage-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clear_dock_obstacles",
+          "check_power",
+          "clean_sensors",
+          "check_auto_return"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-direct-mop-no-water-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [],
+            "not_tried_actions": [
+              "check_water_tank",
+              "adjust_water_volume",
+              "clear_water_outlet"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-direct-mop-no-water-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [
+              {
+                "action_id": "adjust_water_volume",
+                "outcome": "unknown"
+              }
+            ],
+            "not_tried_actions": [
+              "check_water_tank",
+              "clear_water_outlet"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-direct-suction-decline-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "suction",
+            "tried_actions": [
+              {
+                "action_id": "empty_dust_box",
+                "outcome": "success"
+              }
+            ],
+            "not_tried_actions": [
+              "clean_filter",
+              "check_air_duct",
+              "clean_main_brush"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-direct-suction-decline-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "suction",
+            "tried_actions": [
+              {
+                "action_id": "clean_filter",
+                "outcome": "failed"
+              }
+            ],
+            "not_tried_actions": [
+              "check_air_duct",
+              "clean_main_brush",
+              "replace_filter"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-direct-base-power-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "check_adapter"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-direct-base-power-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_adapter",
+          "replace_dock"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-tried-advance-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clear_dock_obstacles",
+          "clean_sensors",
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-tried-advance-01",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "reseat_dock"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-tried-advance-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clean_contacts",
+          "clean_sensors",
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-tried-advance-02",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "reseat_dock"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-negation-01",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [
+          "clear_dock_obstacles",
+          "clean_contacts"
+        ],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-negation-02",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [
+          "clear_dock_obstacles"
+        ],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-correction-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-correction-01",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [
+          "clean_contacts"
+        ],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-correction-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_sensors"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-correction-02",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_sensors"
+        ],
+        "kept": [
+          "replace_dock"
+        ],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-closure-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clear_dock_obstacles"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-closure-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clear_dock_obstacles",
+          "clean_sensors"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-closure-02",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-recharge-closure-02",
+        "turn": 3,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "clear_dock_obstacles",
+              "outcome": "success"
+            },
+            {
+              "action_id": "clean_sensors",
+              "outcome": "success"
+            },
+            {
+              "action_id": "reseat_dock",
+              "outcome": "success"
+            }
+          ]
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "reseat_dock",
+              "outcome": "success"
+            }
+          ]
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-dev-multi-topic-switch-mop-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clear_dock_obstacles"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-topic-switch-mop-01",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_water_tank",
+          "adjust_water_volume",
+          "clear_water_outlet"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-topic-switch-mop-01",
+        "turn": 2,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "mop",
+          "tried_actions": []
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge"
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-dev-multi-topic-switch-mop-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-topic-switch-mop-02",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_tank_seal",
+          "clear_water_outlet"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-dev-multi-topic-switch-mop-02",
+        "turn": 2,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "mop",
+          "tried_actions": []
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "clear_dock_obstacles",
+              "outcome": "success"
+            }
+          ]
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-dev-negation-filter-not-cleaned-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "suction",
+            "tried_actions": [
+              {
+                "action_id": "clean_filter",
+                "outcome": "unknown"
+              }
+            ],
+            "not_tried_actions": [
+              "check_air_duct",
+              "clean_main_brush"
+            ]
+          },
+          {},
+          {
+            "case_status": "active",
+            "scope": "suction",
+            "tried_actions": [],
+            "not_tried_actions": [
+              "clean_filter",
+              "check_air_duct"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-negation-filter-not-cleaned-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "suction",
+            "tried_actions": [],
+            "not_tried_actions": [
+              "clean_filter"
+            ]
+          },
+          {},
+          {
+            "case_status": "active",
+            "scope": "suction",
+            "tried_actions": [
+              {
+                "action_id": "empty_dust_box",
+                "outcome": "success"
+              }
+            ],
+            "not_tried_actions": [
+              "clean_filter",
+              "check_air_duct"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-correction-mop-water-level-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [
+              {
+                "action_id": "check_water_tank",
+                "outcome": "success"
+              }
+            ],
+            "not_tried_actions": [
+              "adjust_water_volume",
+              "clear_water_outlet"
+            ]
+          },
+          {},
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [],
+            "not_tried_actions": [
+              "fill_water_tank",
+              "clear_water_outlet"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-correction-mop-water-level-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [
+              {
+                "action_id": "check_water_tank",
+                "outcome": "unknown"
+              }
+            ],
+            "not_tried_actions": [
+              "clear_water_outlet"
+            ]
+          },
+          {},
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [],
+            "not_tried_actions": [
+              "seat_water_tank",
+              "fill_water_tank",
+              "clear_water_outlet"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-ambiguity-recharge-condition-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-boundary-unknown-model-price-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-boundary-unknown-model-price-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-boundary-out-of-domain-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-boundary-out-of-domain-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-boundary-missing-context-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {},
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-dev-boundary-missing-context-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {},
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-direct-charge-heat-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "recharge"
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-direct-charge-heat-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-direct-edge-brush-wear-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-direct-edge-brush-wear-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-multi-base-moved-remap-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_base_placement",
+          "clean_sensors",
+          "check_auto_return"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-base-moved-remap-01",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clean_sensors",
+          "check_auto_return"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-base-moved-remap-01",
+        "turn": 2,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "clear_dock_obstacles",
+              "outcome": "success"
+            },
+            {
+              "action_id": "reseat_dock",
+              "outcome": "unknown"
+            }
+          ]
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge"
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-hold-multi-base-moved-remap-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_base_placement",
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-base-moved-remap-02",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_sensors",
+          "check_auto_return"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-switch-to-suction-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-switch-to-suction-01",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clean_filter",
+          "check_air_duct",
+          "clean_main_brush"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-switch-to-suction-01",
+        "turn": 2,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "suction",
+          "tried_actions": []
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "clear_dock_obstacles",
+              "outcome": "success"
+            }
+          ]
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-hold-multi-switch-to-suction-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clean_sensors",
+          "check_auto_return"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-switch-to-suction-02",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "empty_dust_box",
+          "clean_filter",
+          "check_air_duct"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-switch-to-suction-02",
+        "turn": 2,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "suction",
+          "tried_actions": []
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "check_power",
+              "outcome": "success"
+            }
+          ]
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-hold-multi-docking-alignment-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_base_placement",
+          "clean_sensors",
+          "reseat_dock"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-docking-alignment-01",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "clean_sensors",
+          "reseat_dock"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-docking-alignment-01",
+        "turn": 2,
+        "kind": "state_override",
+        "old": {
+          "case_status": "active",
+          "scope": "recharge",
+          "tried_actions": [
+            {
+              "action_id": "clear_dock_obstacles",
+              "outcome": "success"
+            },
+            {
+              "action_id": "check_base_placement",
+              "outcome": "failed"
+            }
+          ]
+        },
+        "new": {
+          "case_status": "active",
+          "scope": "recharge"
+        },
+        "reason": "Preserve current recharge state on topic switch, or remove tried actions not explicitly executed by the user."
+      },
+      {
+        "case_id": "rsv1-hold-multi-docking-alignment-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_base_placement",
+          "clean_sensors",
+          "reseat_dock"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-multi-docking-alignment-02",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "reseat_dock",
+          "clean_contacts"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-boundary-renovation-debris-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-boundary-renovation-debris-02",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {}
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-negation-battery-vs-base-01",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_contacts"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-negation-battery-vs-base-01",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_contacts"
+        ],
+        "kept": [
+          "replace_battery"
+        ],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-negation-battery-vs-base-02",
+        "turn": 1,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_contacts"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-negation-battery-vs-base-02",
+        "turn": 3,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "clean_contacts"
+        ],
+        "kept": [
+          "replace_dock"
+        ],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      },
+      {
+        "case_id": "rsv1-hold-fault-empty-retrieval-01",
+        "kind": "answer_only_state_removed",
+        "removed_states": [
+          {
+            "case_status": "active",
+            "scope": "mop"
+          },
+          {
+            "case_status": "active",
+            "scope": "mop",
+            "tried_actions": [],
+            "not_tried_actions": [
+              "check_water_tank",
+              "adjust_water_volume",
+              "clear_water_outlet"
+            ]
+          }
+        ],
+        "reason": "P1 only structures recharge-failure state; this case is another topic/safety/purchase/single-turn QA and must not force a fake state schema."
+      },
+      {
+        "case_id": "rsv1-hold-fault-empty-retrieval-02",
+        "turn": 2,
+        "kind": "not_tried_removed_unless_explicit_negation",
+        "removed": [
+          "check_power",
+          "check_adapter"
+        ],
+        "kept": [],
+        "reason": "Only an explicit user negation creates not_tried; silence and assistant suggestions do not."
+      }
+    ],
+    "not_executed": "No Agent model/product/holdout run was used to decide these corrections; they are data-oracle fixes from the review."
+  },
+  "new_case_fix_policy": {
+    "old_file_unchanged": true,
+    "old_v0_used_for_debugging_only": true,
+    "seeds_and_rewrites_are_development_only": true,
+    "holdout_seed_ids_empty": true
+  }
+}

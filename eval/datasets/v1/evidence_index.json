@@ -1,0 +1,915 @@
+{
+  "schema_version": "robot-support-eval/v1",
+  "created_before_cases": true,
+  "documents": [
+    {
+      "path": "assets/knowledge/故障排除.txt",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "bytes": 42539,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/扫地机器人100问.pdf",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "bytes": 192676,
+      "kind": "knowledge",
+      "extraction": "pdftotext -enc UTF-8 -layout",
+      "note": "PDF text differs by extractor; quotes are checked against pdftotext -layout output and whitespace-normalised as fallback."
+    },
+    {
+      "path": "assets/knowledge/扫地机器人100问2.txt",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "bytes": 18519,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/扫拖一体机器人100问.txt",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "bytes": 21343,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/维护保养.txt",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "bytes": 24532,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/选购指南.txt",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "bytes": 22765,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "README.md",
+      "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+      "bytes": 5080,
+      "kind": "requirement",
+      "extraction": "utf-8 text"
+    }
+  ],
+  "premises": [
+    {
+      "id": "prem-recharge-triage",
+      "claim": "回充失败的原因是多分支的；清障、传感器/红外、供电、APP 设置都应作为候选检查，清理障碍物不是唯一首步，也不能据此直接判硬件。",
+      "evidence_ids": [
+        "ev-fault-recharge-notfound",
+        "ev-1002-recharge-space",
+        "ev-1002-auto-return",
+        "ev-maint-ir",
+        "ev-pdf-no-return"
+      ],
+      "limitations": "资料给出常见原因和检查项，不给出各原因的统计概率。"
+    },
+    {
+      "id": "prem-recharge-advance",
+      "claim": "用户明确说已做且仍失败的低风险步骤，不应再作为首要未试建议；下一步应转向供电、红外/传感器、摆放或手动放回等未验证分支。",
+      "evidence_ids": [
+        "ev-fault-manual-return",
+        "ev-fault-base-power",
+        "ev-maint-contacts",
+        "ev-maint-ir"
+      ],
+      "limitations": "这是行为要求与资料检查项的组合，不是资料中的状态机字段。"
+    },
+    {
+      "id": "prem-negation",
+      "claim": "用户说“没试过/没擦/没清”时，该动作必须记为未试，不能被助手建议或用户否定句反推为已试。",
+      "evidence_ids": [
+        "req-answer-behavior",
+        "ev-fault-recharge-notfound"
+      ],
+      "limitations": "语义否定仍需人工判断；不能用关键词命中代替。"
+    },
+    {
+      "id": "prem-correction",
+      "claim": "用户明确更正后，以最后一次明确陈述为准；旧事实应被覆盖，不继续按其回答。",
+      "evidence_ids": [
+        "req-answer-behavior",
+        "ev-maint-contacts"
+      ],
+      "limitations": "案例只写用户可见语义，不规定内部存储字段。"
+    },
+    {
+      "id": "prem-closure",
+      "claim": "只有用户明确报告自动回充恢复，才可结案；手动放回能充电不等于自动回充已解决。",
+      "evidence_ids": [
+        "ev-fault-manual-return",
+        "ev-maint-repeat-return"
+      ],
+      "limitations": "结案判断依赖用户陈述，不能由模型自行推断。"
+    },
+    {
+      "id": "prem-scope",
+      "claim": "客服只处理 6 份扫地/扫拖资料范围内的问题；不能查账号/订单、控制设备或提供服装建议。",
+      "evidence_ids": [
+        "req-kb-scope",
+        "req-no-actions"
+      ],
+      "limitations": "README 是产品需求，不是知识事实；域外拒答不证明模型一般知识能力。"
+    },
+    {
+      "id": "prem-unknown-model",
+      "claim": "Galaxy X99 没有出现在 6 份资料中，也没有型号专属价格/保修信息；只能用泛化价格区间和一般保修说明，不能套用成 X99 官方承诺。",
+      "evidence_ids": [
+        "req-kb-scope",
+        "ev-guide-price-range",
+        "ev-pdf-avva-price",
+        "ev-1002-warranty"
+      ],
+      "limitations": "这是对本语料的覆盖结论，不是对现实世界或 top-k 检索结果的证明。"
+    },
+    {
+      "id": "prem-mop",
+      "claim": "拖地不出水/漏水先查水箱、出水量、出水口/出水管和密封圈；不直接判水泵故障，不建议自行拆泵。",
+      "evidence_ids": [
+        "ev-fault-mop-no-water",
+        "ev-fault-water-leak",
+        "ev-maint-mop-outlet",
+        "ev-maint-tank-seal",
+        "ev-sweepmop-outlet",
+        "ev-maint-no-diy"
+      ],
+      "limitations": "资料覆盖常见水路问题，不覆盖所有机型结构。"
+    },
+    {
+      "id": "prem-suction",
+      "claim": "吸力下降优先查尘盒、滤网、风道、主刷和吸口；滤网需干燥且未破损；不先判电机损坏。",
+      "evidence_ids": [
+        "ev-fault-suction",
+        "ev-maint-suction",
+        "ev-1002-suction",
+        "ev-pdf-filter",
+        "ev-maint-filter",
+        "ev-fault-mainbrush"
+      ],
+      "limitations": "资料不提供吸力数值基线或电机诊断方法。"
+    },
+    {
+      "id": "prem-safety",
+      "claim": "不提供拆机、短接、打磨内部触点或更换主板的操作；异常发热、焦味、鼓包、漏液应先停止使用并联系官方售后。",
+      "evidence_ids": [
+        "ev-maint-no-diy",
+        "ev-1002-no-diy",
+        "ev-sweepmop-repair",
+        "ev-fault-base-heat",
+        "ev-fault-burning",
+        "ev-fault-battery-bulge-charge"
+      ],
+      "limitations": "资料是通用安全建议，不是品牌官方维修授权。"
+    },
+    {
+      "id": "prem-metric-condition",
+      "claim": "选购指南 #36 的“支持自动回充精准度≥95%”与 #84 的“复杂环境下回充精准度≥90%”条件/语境不同，不能当作同对象同条件的矛盾，也不能合并成唯一标准。",
+      "evidence_ids": [
+        "ev-guide-95",
+        "ev-guide-90"
+      ],
+      "limitations": "这是资料表述差异，不是对产品实测性能的裁决；需要具体型号/测试条件才能进一步判断。"
+    },
+    {
+      "id": "prem-fault",
+      "claim": "超时、空检索、进程重启等注入故障只验证失败/恢复行为，不属于自然用户 QA 分母；空检索不能证明资料不存在。",
+      "evidence_ids": [
+        "req-retrieval-limits",
+        "req-answer-behavior",
+        "req-eval-scope"
+      ],
+      "limitations": "本轮只定义注入步骤和预期，不实际启动产品服务或 Agent 模型。"
+    },
+    {
+      "id": "prem-review",
+      "claim": "48 条均为合成案例，语义 rubric 由本 executor 人工/Agent 编写；人工审核仍 pending，不能写成已审核通过或成功率。",
+      "evidence_ids": [
+        "req-eval-scope"
+      ],
+      "limitations": "自动校验只覆盖结构、引用、hash、分布和重复，不判定回答语义正确。"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "id": "coverage-x99",
+      "query_terms": [
+        "X99",
+        "Galaxy"
+      ],
+      "files": [
+        "assets/knowledge/故障排除.txt",
+        "assets/knowledge/扫地机器人100问.pdf",
+        "assets/knowledge/扫地机器人100问2.txt",
+        "assets/knowledge/扫拖一体机器人100问.txt",
+        "assets/knowledge/维护保养.txt",
+        "assets/knowledge/选购指南.txt",
+        "README.md"
+      ],
+      "matches": 0,
+      "method": "只读全文扫描 6 份知识文件与 README；PDF 使用 pdftotext -layout 文本。",
+      "conclusion": "本语料没有 Galaxy X99 的型号专属价格/保修内容。该结论是语料覆盖，不是现实世界不存在，也不是一次 top-k 未命中的证明。"
+    },
+    {
+      "id": "coverage-price-examples",
+      "query_terms": [
+        "售价",
+        "价格区间"
+      ],
+      "files": [
+        "assets/knowledge/选购指南.txt",
+        "assets/knowledge/扫地机器人100问.pdf"
+      ],
+      "matches": 3,
+      "method": "全文定位泛化价格区间与单一历史型号价格例子。",
+      "conclusion": "价格内容只有泛化区间和 Avva 30 例子，均不能作为 Galaxy X99 售价。"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "req-kb-scope",
+      "file": "README.md",
+      "quote": "只读取本工程 `assets/knowledge/` 里的 6 份扫地/扫拖机器人资料，不包含服装资料。",
+      "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+      "kind": "requirement",
+      "topic": "scope",
+      "quote_check": "exact"
+    },
+    {
+      "id": "req-answer-behavior",
+      "file": "README.md",
+      "quote": "回答要求：真实检索、方括号来源引用、资料不足时先追问；只使用扫地机器人知识。",
+      "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+      "kind": "requirement",
+      "topic": "answer_behavior",
+      "quote_check": "exact"
+    },
+    {
+      "id": "req-no-actions",
+      "file": "README.md",
+      "quote": "工具只登记 `rag_summarize` / `rag_retrieve`，没有业务动作工具（不能控制设备、查询账号或生成个人报告）。",
+      "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+      "kind": "requirement",
+      "topic": "capability_boundary",
+      "quote_check": "normalized"
+    },
+    {
+      "id": "req-retrieval-limits",
+      "file": "README.md",
+      "quote": "检索来源只做本轮证据存在性映射，不声称引用语义一定正确；空检索/错误/超时/冲突会显式提示。",
+      "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+      "kind": "requirement",
+      "topic": "failure_behavior",
+      "quote_check": "exact"
+    },
+    {
+      "id": "req-eval-scope",
+      "file": "README.md",
+      "quote": "16 条起步开发集、真实 4 轮观察和重启恢复证据仅限各自范围，不是 40–60 正式评测或成功率。",
+      "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+      "kind": "requirement",
+      "topic": "evaluation_boundary",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-no-power",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "1. 故障现象：机器人开机无反应，指示灯不亮；检测：检查电源适配器是否插紧、电源线是否破损，电池是否安装到位；修复：更换完好电源线，重新插拔电池，确保充电座通电，若仍无反应联系售后检测主板。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "power_on",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-auto-shutdown",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "2. 故障现象：开机后立即自动关机；检测：电池电量是否耗尽，机身是否过热，电池是否鼓包；修复：充满电后重试，移至通风处冷却，电池鼓包则立即更换原装电池。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "power_on",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-suction",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "7. 故障现象：吸力明显下降；检测：尘盒、滤网、风道是否堵塞，主刷是否缠绕杂物，吸口是否被遮挡；修复：逐一清理堵塞部位，剪断主刷缠绕毛发，检查吸口无异物。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "suction",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-mainbrush",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "8. 故障现象：主刷不旋转；检测：主刷是否被异物卡死，电机线路是否松动，主刷电机是否故障；修复：清理主刷杂物，重新安装主刷，若仍不转联系售后检测电机。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "main_brush",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-water-leak",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "15. 故障现象：拖地时水箱漏水；检测：水箱盖是否拧紧，密封圈是否老化、脱落，出水管是否堵塞；修复：拧紧水箱盖，更换老化密封圈，疏通出水管。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-mop-no-water",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "16. 故障现象：拖地不出水；检测：水箱是否有水，出水量是否调至最低，出水管是否堵塞；修复：加注清水，调高出水量，用牙签轻轻疏通出水管。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-battery-wont-charge",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "38. 故障现象：电池充不进电，指示灯不亮；检测：电源适配器是否通电，充电触点是否氧化，电池是否损坏；修复：更换电源适配器，打磨氧化触点，更换损坏电池。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "charging",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-spark",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "46. 故障现象：机器人充电时出现电火花；检测：充电触点是否有灰尘、氧化，电源适配器是否故障；修复：擦拭充电触点，更换电源适配器，立即停止充电排查。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "charging_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-base-power",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "55. 故障现象：充电座指示灯不亮，无法供电；检测：电源线是否插紧，充电座是否损坏，插座是否通电；修复：重新插拔电源线，更换插座，损坏则更换充电座。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "charging_base",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-manual-return",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-battery-leak",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "100. 故障现象：电池漏液，腐蚀机身内部；检测：漏液是否严重，是否影响主板；修复：立即停止使用，清理漏液，联系售后检测主板，更换电池。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "battery_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-floor-scratch",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "101. 故障现象：机器人在木地板上工作时刮伤地面；检测：轮组是否有尖锐杂物，主刷是否有硬物，地面是否有沙粒；修复：清理轮组和主刷硬物，提前清理地面沙粒。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "floor_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-burning",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "104. 故障现象：机器人工作时突然发出烧焦味；检测：电机是否过载，电线是否短路，电池是否故障；修复：立即关机，断开电源，联系售后全面检测。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "charging_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-recharge-notfound",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清理充电座周围3米内障碍物，擦拭回充传感器，重新摆放充电座。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-collide-base",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "118. 故障现象：机器人无法识别充电座，碰撞充电座；检测：充电座是否摆放平整，回充传感器是否故障；修复：调整充电座位置，擦拭传感器，检测传感器功能。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "recharge_alignment",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-base-heat",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "140. 故障现象：机器人充电时充电座发热严重；检测：充电座是否通风良好，是否为原装充电座，是否有短路；修复：移至通风处充电，更换原装充电座，排查短路问题。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "charging_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-mop-dry",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "186. 故障现象：拖地时出水量正常，但地面仍干燥，无拖地效果；检测：拖布是否未湿润，拖布是否堵塞出水管；修复：湿润拖布，清理拖布堵塞物。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-fault-battery-bulge-charge",
+      "file": "assets/knowledge/故障排除.txt",
+      "quote": "165. 故障现象：机器人充电时电池鼓包，有安全隐患；检测：是否过充，电池是否老化，充电适配器是否故障；修复：立即停止充电，更换原装电池和适配器。",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "kind": "knowledge",
+      "topic": "charging_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-filter",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "1. HEPA滤网：每周用软毛刷轻刷表面灰尘，每1-2个月用清水冲洗（不可揉搓），阴凉处晾干，3-6个月更换新滤网。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "filter",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-edge-brush",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "3. 边刷：刷毛磨损至＜1cm、变形或断裂时更换，一般2-3个月更换一次，多尘环境1个月更换。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "edge_brush",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-contacts",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "5. 每天清洁机器人充电触点，用干布擦拭机身和充电座的金属触点，避免氧化导致接触不良。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-suction",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "9. 扫地时若吸力下降，优先检查尘盒、滤网、风道是否堵塞，逐一清理后重试。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "suction",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-no-diy",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "9. 避免自行拆解机器人内部零件（如电机、主板、电池），故障后联系官方售后维修。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-mop-outlet",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "12. 拖地时若出水量异常，立即清理水箱出水口和出水管，用牙签轻轻疏通，避免堵塞。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-tank-seal",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "10. 水箱密封圈每周用干布擦拭，检查无老化、开裂、变形，保证水箱密封严实不漏水。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-battery-check",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "16. 每月检查机器人电池仓，确认电池无鼓包、漏液，排线连接牢固无松动。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "battery",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-repeat-return",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "19. 机器人回充时，保证充电座周围无遮挡，避免机器人反复尝试回充导致电机、电池损耗。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-base-level",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "24. 每日检查充电座摆放是否平整，周围无杂物遮挡，保证机器人回充顺畅。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-ir",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "25. 每周清理充电座红外感应区，用干布擦拭，避免灰尘影响回充信号接收。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-power-cord",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "26. 充电座电源线避免挤压、缠绕，每周检查插头、线体无破损，防止短路。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "charging_base",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-original-cord",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "28. 电源线（充电座）：出现破损、老化、发热时，立即更换原装电源线，不可用非原装线替代。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "charging_base",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-maint-renovation",
+      "file": "assets/knowledge/维护保养.txt",
+      "quote": "20. 装修后清洁环境：先手动开荒，清理水泥渣、沙粒、尖锐杂物后，再使用机器人，避免卡死机件、刮伤配件。",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "kind": "knowledge",
+      "topic": "renovation",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-recharge-space",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 清理充电座周围障碍物，保证充电座前方3米、左右1米无遮挡，将机器人放回充电座附近重启回充。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-auto-return",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 检查APP是否关闭“自动回充”功能，确认地图中充电座位置未被修改，清理机器人回充传感器灰尘。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-edge-brush",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 边刷磨损会导致边角清扫不彻底，拆卸机身底部边刷卡扣，直接更换新边刷，按压卡紧即可。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "edge_brush",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-water-leak",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 检查水箱盖是否拧紧，出水管是否堵塞，调小出水量，拖地时避免机器人剧烈晃动，更换破损水箱。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-battery-fault",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 关闭机器人电源，重新插拔电池，若仍报警，联系售后检测电池，必要时更换电池。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "battery",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-recharge-sensor-alarm",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 擦拭机器人底部回充传感器，清理充电座红外感应区，保证无遮挡，重新尝试回充。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-power-alarm",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 检查机身是否有短路、异响，立即断开电源，联系售后检测电机和电路，切勿自行拆解。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "power_on",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-out-of-warranty",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 联系品牌官方售后，付费维修，或选择第三方专业维修机构，切勿自行拆解机器人。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "warranty",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-warranty",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 查看机器人产品说明书、购买发票，或在APP中进入【设备信息】查看保修时间，一般整机保修1-2年，电池保修6个月。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "warranty",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-no-diy",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 不建议，机器人内部电路、传感器复杂，自行拆解会损坏设备，失去保修，故障后联系专业售后。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-low-temp",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 将机器人移至室温环境（5℃以上），静置30分钟，重新充电，避免在低温环境下使用。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "battery",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-charge-heat",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 检查充电座是否通风良好，避免机器人在密闭环境中充电，暂停充电，待机身冷却后重新充电，若仍发热联系售后。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "charging_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-1002-suction",
+      "file": "assets/knowledge/扫地机器人100问2.txt",
+      "quote": "- 全面清理尘盒、滤网、滚刷、吸口的灰尘和杂物，更换磨损的主刷、边刷，校准电机，若仍吸力不足联系售后检测。",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "kind": "knowledge",
+      "topic": "suction",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-tank-seal",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 检查水箱盖是否拧紧、水箱密封圈是否脱落或破损，确认出水管无堵塞，加水至刻度线内，避免过满溢出。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-water-volume",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 在APP中进入【拖地设置】，一般分低、中、高三档出水量，木地板选低档，瓷砖、水泥地可选中高档。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-outlet",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 用牙签或细铁丝轻轻疏通出水管口，避免用力过猛损坏水管；再用清水冲洗水箱内部，确保出水顺畅。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-mop-life",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 可水洗拖布正常使用下3-6个月更换一次，宠物家庭或重油污区域1-2个月更换；一次性拖布为单次使用，随用随换。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "mop_water",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-renovation",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 不建议，装修后地面有大量水泥渣、沙粒、尖锐杂物，会刮伤机器人机身和地面，还会堵塞滤网、卡死机件，需手动开荒后再使用。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "renovation",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-warranty",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 包括，整机保修范围内（一般1-2年），拖地模组的电机、水箱、拖布支架等非易损件出现故障可免费维修或更换，易损件（拖布、密封圈）不在保修范围内。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "warranty",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-repair",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 维修费用根据故障部件而定，拖布电机、水泵等核心部件费用稍高，滤网、卡扣等小配件费用较低，建议选择官方售后维修，保证配件原装。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-sweepmop-replace",
+      "file": "assets/knowledge/扫拖一体机器人100问.txt",
+      "quote": "- 若机器人使用3年以上，出现吸力严重下降、拖地模组频繁故障、建图错乱且维修费用较高（超过新机价格的1/3），建议更换新机，新款机型的扫拖功能和避障效果更优。",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "kind": "knowledge",
+      "topic": "purchase",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-95",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "36. 充电座设计：充电触点带防氧化涂层，防滑底座避免移位，支持自动回充精准度≥95%。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "recharge_metric",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-price-range",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "53. 价格区间：预算3000元内选基础款（激光导航+旋转拖布），5000元以上可选自动集尘+热风烘干款。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "price",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-90",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "84. 回充精准度：在复杂环境下回充精准度≥90%，避免找不到充电座导致电量耗尽。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "recharge_metric",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-warranty",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "100. 质保范围：明确质保范围，人为损坏（如跌落、进水）不在质保内，购买时可额外购买意外险。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "warranty",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-base-clean",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "120. 充电座清洁：充电座表面易清洁，充电触点可擦拭，避免氧化影响充电效果。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "charging_base",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-base-position",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "141. 充电座定位：充电座带定位灯，便于机器人在光线较暗环境下找到充电座。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-guide-base-waterproof",
+      "file": "assets/knowledge/选购指南.txt",
+      "quote": "175. 充电座防水：充电座防水等级≥IPX3，避免潮湿环境短路。",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "kind": "knowledge",
+      "topic": "charging_safety",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-filter",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "建议每 3-6 个月更换，水洗会降低过滤效果。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "filter",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-edge-brush",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "每 6-12 个月检查磨损情况，变形严重时需要更换。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "edge_brush",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-edge-brush-life",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "约 6-12 个月，视使用频率而定。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "edge_brush",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-no-return",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "充电座位置变动、前方有障碍物或红外传感器脏污。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "recharge",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-main-brush",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "胶刷 1-2 年，毛刷 6-12 个月检查磨损情况。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "main_brush",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-battery-life",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "一般不需要，原装电池可使用 2-3 年。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "battery",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-overcharge",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "不会，现代锂电池有过充保护。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "charging",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-repair-cost",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "过保后主板维修较贵，建议购买延保服务。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "warranty",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-avva-price",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "iRobot 的商用机型 Avva 30，售价约 2 万美元。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "price",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-low-temp-charge",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "避免在低温环境(≤0℃)充电，可能损坏电池。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "battery",
+      "quote_check": "exact"
+    },
+    {
+      "id": "ev-pdf-dustbox-dry",
+      "file": "assets/knowledge/扫地机器人100问.pdf",
+      "quote": "可以，但必须完全晾干后再使用。",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "kind": "knowledge",
+      "topic": "filter",
+      "quote_check": "exact"
+    }
+  ]
+}

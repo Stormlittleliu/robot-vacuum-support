@@ -1,0 +1,138 @@
+{
+  "schema_version": "robot-support-eval/v1",
+  "suite_id": "robot-support-v1",
+  "revision": "v1.1",
+  "cases_file": "cases.jsonl",
+  "split_file": "split.json",
+  "counts": {
+    "development": 32,
+    "holdout": 16
+  },
+  "source_snapshot": {
+    "documents": [
+      {
+        "path": "assets/knowledge/故障排除.txt",
+        "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+        "bytes": 42539,
+        "kind": "knowledge",
+        "extraction": "utf-8 text"
+      },
+      {
+        "path": "assets/knowledge/扫地机器人100问.pdf",
+        "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+        "bytes": 192676,
+        "kind": "knowledge",
+        "extraction": "pdftotext -enc UTF-8 -layout",
+        "note": "PDF text differs by extractor; quotes are checked against pdftotext -layout output and whitespace-normalised as fallback."
+      },
+      {
+        "path": "assets/knowledge/扫地机器人100问2.txt",
+        "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+        "bytes": 18519,
+        "kind": "knowledge",
+        "extraction": "utf-8 text"
+      },
+      {
+        "path": "assets/knowledge/扫拖一体机器人100问.txt",
+        "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+        "bytes": 21343,
+        "kind": "knowledge",
+        "extraction": "utf-8 text"
+      },
+      {
+        "path": "assets/knowledge/维护保养.txt",
+        "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+        "bytes": 24532,
+        "kind": "knowledge",
+        "extraction": "utf-8 text"
+      },
+      {
+        "path": "assets/knowledge/选购指南.txt",
+        "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+        "bytes": 22765,
+        "kind": "knowledge",
+        "extraction": "utf-8 text"
+      },
+      {
+        "path": "README.md",
+        "sha256": "f3fc1eada15a3e2fc21431ea6fe5a4fd9fae92c923155f5dd6cfc5c9e6f0e87d",
+        "bytes": 5080,
+        "kind": "requirement",
+        "extraction": "utf-8 text"
+      }
+    ],
+    "generated_at": "2026-11-13T03:32:38+08:00",
+    "generator_version": "v1.0",
+    "seed": 20261113,
+    "cases_sha256": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94",
+    "holdout_cases_sha256": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1",
+    "evidence_index_sha256": "a67038d9d568f8d7e9d1bab0ce4eb8bae53e7365e3db09becb8467bf13a37646",
+    "coverage_checks": [
+      {
+        "id": "coverage-x99",
+        "query_terms": [
+          "X99",
+          "Galaxy"
+        ],
+        "files": [
+          "assets/knowledge/故障排除.txt",
+          "assets/knowledge/扫地机器人100问.pdf",
+          "assets/knowledge/扫地机器人100问2.txt",
+          "assets/knowledge/扫拖一体机器人100问.txt",
+          "assets/knowledge/维护保养.txt",
+          "assets/knowledge/选购指南.txt",
+          "README.md"
+        ],
+        "matches": 0,
+        "method": "只读全文扫描 6 份知识文件与 README；PDF 使用 pdftotext -layout 文本。",
+        "conclusion": "本语料没有 Galaxy X99 的型号专属价格/保修内容。该结论是语料覆盖，不是现实世界不存在，也不是一次 top-k 未命中的证明。"
+      },
+      {
+        "id": "coverage-price-examples",
+        "query_terms": [
+          "售价",
+          "价格区间"
+        ],
+        "files": [
+          "assets/knowledge/选购指南.txt",
+          "assets/knowledge/扫地机器人100问.pdf"
+        ],
+        "matches": 3,
+        "method": "全文定位泛化价格区间与单一历史型号价格例子。",
+        "conclusion": "价格内容只有泛化区间和 Avva 30 例子，均不能作为 Galaxy X99 售价。"
+      }
+    ],
+    "note": "源文件只读；README 为 requirement，其余 6 份为 knowledge。"
+  },
+  "review_status": "pending_human",
+  "denominators": {
+    "qa": 44,
+    "fault_injection": 4
+  },
+  "description": "48 条合成回归案例（32 development / 16 frozen holdout），24 个情境+oracle 家族；人工语义复核 pending。",
+  "audit_history": [
+    {
+      "revision": "v1.0",
+      "status": "superseded",
+      "cases_sha256": "e766dda85854da9f90ffa24889139b40669b8eec04baf5531015330b87a2bf4f",
+      "holdout_cases_sha256": "558918e7dca2c5854428b18c6add6315a30c585b79419a1e13099ea8124f269e",
+      "reason": "Initial v1 build; superseded after the data review corrected non-recharge state overreach, not_tried overreach, and expected_sources semantics."
+    },
+    {
+      "revision": "v1.1",
+      "status": "current",
+      "cases_sha256": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94",
+      "holdout_cases_sha256": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1",
+      "reason": "Data-only oracle correction; no product/runtime/scorer change, no holdout execution, holdout re-frozen under the new hash."
+    }
+  ],
+  "oracle_corrections": {
+    "count": 67,
+    "by_kind": {
+      "answer_only_state_removed": 22,
+      "not_tried_removed_unless_explicit_negation": 38,
+      "state_override": 7
+    },
+    "note": "Revision v1.1 data-only correction; see audit.json / docs/case-generation.md."
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "schema_version": "context-diagnosis-development/v1",
+  "split": "development",
+  "purpose": "IP-1 迁移验证：工作语境、歧义、渐进诊断、topic 切换与弱结案。不是 holdout，不是成功率，不用于调 holdout。",
+  "turns": "每个 case 只使用 role=user；assistant 的回答由真实产品运行验证，不在状态单测里伪造。",
+  "cases": [
+    {
+      "id": "ctx-ambiguity-find-dock-open",
+      "turns": ["回充失败，找不到充电座"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "direct_contains_all": ["机器人", "位置"],
+        "next_kind": "clarify",
+        "ambiguity": {"id": "dock_find_referent", "status": "open"},
+        "tried": []
+      }
+    },
+    {
+      "id": "ctx-clear-robot-no-clarify",
+      "turns": ["回充失败，机器人老在充电座前面转，就是对不上"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "direct_contains_all": [],
+        "next_kind": "action",
+        "next_action": "clean_sensors",
+        "experiencer": "robot",
+        "ambiguity": null,
+        "tried": []
+      }
+    },
+    {
+      "id": "ctx-user-cannot-find-dock",
+      "turns": ["回充失败，我搬完家找不到充电座放哪了"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "next_kind": "place_dock",
+        "next_action": "place_dock",
+        "experiencer": "user",
+        "tried": []
+      }
+    },
+    {
+      "id": "ctx-novice-one-step",
+      "turns": ["回充失败，我不懂怎么排查，你一步步告诉我"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "familiarity": "novice",
+        "next_kind": "action",
+        "single_next_step": true,
+        "tried": []
+      }
+    },
+    {
+      "id": "ctx-user-not-tried",
+      "turns": ["回充失败", "我没清理触点，还是不行"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "tried": [],
+        "not_tried": ["clean_contacts"],
+        "next_action": "clean_contacts"
+      }
+    },
+    {
+      "id": "ctx-correction-withdraws-tried",
+      "turns": ["回充失败", "我擦了触点，还是不行", "不对，我说错了，我没擦触点"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "tried": [],
+        "not_tried": ["clean_contacts"],
+        "next_action": "clean_contacts"
+      }
+    },
+    {
+      "id": "ctx-unknown-outcome-confirm",
+      "turns": ["回充失败", "我擦了触点"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "tried": [["clean_contacts", "unknown"]],
+        "next_kind": "confirm"
+      }
+    },
+    {
+      "id": "ctx-topic-switch-keeps-old-task",
+      "turns": ["回充失败，已经清理了充电座周围", "对了，拖地时水箱漏水怎么办？"],
+      "expect": {
+        "scope": "other",
+        "has_case": true,
+        "old_task_status": "open",
+        "pending_confirmation": true,
+        "old_tried": [["clear_dock_obstacles", "unknown"]]
+      }
+    },
+    {
+      "id": "ctx-thanks-does-not-resolve",
+      "turns": ["回充失败", "谢谢"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "status": "active",
+        "closure_level": "weak_positive",
+        "next_kind": "confirm"
+      }
+    },
+    {
+      "id": "ctx-explicit-success-resolves",
+      "turns": ["回充失败", "清完能自己回充了"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "status": "resolved",
+        "closure_level": "explicit_success",
+        "open_task_status": "resolved"
+      }
+    },
+    {
+      "id": "ctx-partial-success-stays-active",
+      "turns": ["回充失败", "手动放回能充，自动还是不行"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "status": "active",
+        "closure_level": "partial_success",
+        "next_kind": "action"
+      }
+    },
+    {
+      "id": "ctx-safety-before-diagnosis",
+      "turns": ["回充时充电座冒烟了，还有焦味"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "next_kind": "safety",
+        "next_action": "safety_check",
+        "forbid_auto_action": "factory_reset"
+      }
+    },
+    {
+      "id": "ctx-natural-return-language",
+      "turns": ["机器人回不去了"],
+      "expect": {
+        "scope": "recharge",
+        "has_case": true,
+        "status": "active"
+      }
+    }
+  ]
+}

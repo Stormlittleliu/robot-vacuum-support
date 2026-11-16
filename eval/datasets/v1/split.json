@@ -1,0 +1,364 @@
+{
+  "schema_version": "robot-support-eval/v1",
+  "suite_id": "robot-support-v1",
+  "generated_at": "2026-11-13T03:32:38+08:00",
+  "seed": 20261113,
+  "development": {
+    "count": 32,
+    "case_ids": [
+      "rsv1-dev-ambiguity-recharge-condition-01",
+      "rsv1-dev-ambiguity-recharge-condition-02",
+      "rsv1-dev-boundary-missing-context-01",
+      "rsv1-dev-boundary-missing-context-02",
+      "rsv1-dev-boundary-out-of-domain-01",
+      "rsv1-dev-boundary-out-of-domain-02",
+      "rsv1-dev-boundary-unknown-model-price-01",
+      "rsv1-dev-boundary-unknown-model-price-02",
+      "rsv1-dev-correction-mop-water-level-01",
+      "rsv1-dev-correction-mop-water-level-02",
+      "rsv1-dev-direct-base-power-01",
+      "rsv1-dev-direct-base-power-02",
+      "rsv1-dev-direct-mop-no-water-01",
+      "rsv1-dev-direct-mop-no-water-02",
+      "rsv1-dev-direct-recharge-triage-01",
+      "rsv1-dev-direct-recharge-triage-02",
+      "rsv1-dev-direct-suction-decline-01",
+      "rsv1-dev-direct-suction-decline-02",
+      "rsv1-dev-fault-process-restart-01",
+      "rsv1-dev-fault-process-restart-02",
+      "rsv1-dev-multi-recharge-closure-01",
+      "rsv1-dev-multi-recharge-closure-02",
+      "rsv1-dev-multi-recharge-correction-01",
+      "rsv1-dev-multi-recharge-correction-02",
+      "rsv1-dev-multi-recharge-negation-01",
+      "rsv1-dev-multi-recharge-negation-02",
+      "rsv1-dev-multi-recharge-tried-advance-01",
+      "rsv1-dev-multi-recharge-tried-advance-02",
+      "rsv1-dev-multi-topic-switch-mop-01",
+      "rsv1-dev-multi-topic-switch-mop-02",
+      "rsv1-dev-negation-filter-not-cleaned-01",
+      "rsv1-dev-negation-filter-not-cleaned-02"
+    ],
+    "families": {
+      "fam-dev-ambiguity-recharge-condition": [
+        "rsv1-dev-ambiguity-recharge-condition-01",
+        "rsv1-dev-ambiguity-recharge-condition-02"
+      ],
+      "fam-dev-boundary-missing-context": [
+        "rsv1-dev-boundary-missing-context-01",
+        "rsv1-dev-boundary-missing-context-02"
+      ],
+      "fam-dev-boundary-out-of-domain": [
+        "rsv1-dev-boundary-out-of-domain-01",
+        "rsv1-dev-boundary-out-of-domain-02"
+      ],
+      "fam-dev-boundary-unknown-model-price": [
+        "rsv1-dev-boundary-unknown-model-price-01",
+        "rsv1-dev-boundary-unknown-model-price-02"
+      ],
+      "fam-dev-correction-mop-water-level": [
+        "rsv1-dev-correction-mop-water-level-01",
+        "rsv1-dev-correction-mop-water-level-02"
+      ],
+      "fam-dev-direct-base-power": [
+        "rsv1-dev-direct-base-power-01",
+        "rsv1-dev-direct-base-power-02"
+      ],
+      "fam-dev-direct-mop-no-water": [
+        "rsv1-dev-direct-mop-no-water-01",
+        "rsv1-dev-direct-mop-no-water-02"
+      ],
+      "fam-dev-direct-recharge-triage": [
+        "rsv1-dev-direct-recharge-triage-01",
+        "rsv1-dev-direct-recharge-triage-02"
+      ],
+      "fam-dev-direct-suction-decline": [
+        "rsv1-dev-direct-suction-decline-01",
+        "rsv1-dev-direct-suction-decline-02"
+      ],
+      "fam-dev-fault-process-restart": [
+        "rsv1-dev-fault-process-restart-01",
+        "rsv1-dev-fault-process-restart-02"
+      ],
+      "fam-dev-multi-recharge-closure": [
+        "rsv1-dev-multi-recharge-closure-01",
+        "rsv1-dev-multi-recharge-closure-02"
+      ],
+      "fam-dev-multi-recharge-correction": [
+        "rsv1-dev-multi-recharge-correction-01",
+        "rsv1-dev-multi-recharge-correction-02"
+      ],
+      "fam-dev-multi-recharge-negation": [
+        "rsv1-dev-multi-recharge-negation-01",
+        "rsv1-dev-multi-recharge-negation-02"
+      ],
+      "fam-dev-multi-recharge-tried-advance": [
+        "rsv1-dev-multi-recharge-tried-advance-01",
+        "rsv1-dev-multi-recharge-tried-advance-02"
+      ],
+      "fam-dev-multi-topic-switch-mop": [
+        "rsv1-dev-multi-topic-switch-mop-01",
+        "rsv1-dev-multi-topic-switch-mop-02"
+      ],
+      "fam-dev-negation-filter-not-cleaned": [
+        "rsv1-dev-negation-filter-not-cleaned-01",
+        "rsv1-dev-negation-filter-not-cleaned-02"
+      ]
+    }
+  },
+  "holdout": {
+    "count": 16,
+    "case_ids": [
+      "rsv1-hold-boundary-renovation-debris-01",
+      "rsv1-hold-boundary-renovation-debris-02",
+      "rsv1-hold-direct-charge-heat-01",
+      "rsv1-hold-direct-charge-heat-02",
+      "rsv1-hold-direct-edge-brush-wear-01",
+      "rsv1-hold-direct-edge-brush-wear-02",
+      "rsv1-hold-fault-empty-retrieval-01",
+      "rsv1-hold-fault-empty-retrieval-02",
+      "rsv1-hold-multi-base-moved-remap-01",
+      "rsv1-hold-multi-base-moved-remap-02",
+      "rsv1-hold-multi-docking-alignment-01",
+      "rsv1-hold-multi-docking-alignment-02",
+      "rsv1-hold-multi-switch-to-suction-01",
+      "rsv1-hold-multi-switch-to-suction-02",
+      "rsv1-hold-negation-battery-vs-base-01",
+      "rsv1-hold-negation-battery-vs-base-02"
+    ],
+    "families": {
+      "fam-hold-boundary-renovation-debris": [
+        "rsv1-hold-boundary-renovation-debris-01",
+        "rsv1-hold-boundary-renovation-debris-02"
+      ],
+      "fam-hold-direct-charge-heat": [
+        "rsv1-hold-direct-charge-heat-01",
+        "rsv1-hold-direct-charge-heat-02"
+      ],
+      "fam-hold-direct-edge-brush-wear": [
+        "rsv1-hold-direct-edge-brush-wear-01",
+        "rsv1-hold-direct-edge-brush-wear-02"
+      ],
+      "fam-hold-fault-empty-retrieval": [
+        "rsv1-hold-fault-empty-retrieval-01",
+        "rsv1-hold-fault-empty-retrieval-02"
+      ],
+      "fam-hold-multi-base-moved-remap": [
+        "rsv1-hold-multi-base-moved-remap-01",
+        "rsv1-hold-multi-base-moved-remap-02"
+      ],
+      "fam-hold-multi-docking-alignment": [
+        "rsv1-hold-multi-docking-alignment-01",
+        "rsv1-hold-multi-docking-alignment-02"
+      ],
+      "fam-hold-multi-switch-to-suction": [
+        "rsv1-hold-multi-switch-to-suction-01",
+        "rsv1-hold-multi-switch-to-suction-02"
+      ],
+      "fam-hold-negation-battery-vs-base": [
+        "rsv1-hold-negation-battery-vs-base-01",
+        "rsv1-hold-negation-battery-vs-base-02"
+      ]
+    }
+  },
+  "family_split": {
+    "fam-dev-ambiguity-recharge-condition": "development",
+    "fam-dev-boundary-missing-context": "development",
+    "fam-dev-boundary-out-of-domain": "development",
+    "fam-dev-boundary-unknown-model-price": "development",
+    "fam-dev-correction-mop-water-level": "development",
+    "fam-dev-direct-base-power": "development",
+    "fam-dev-direct-mop-no-water": "development",
+    "fam-dev-direct-recharge-triage": "development",
+    "fam-dev-direct-suction-decline": "development",
+    "fam-dev-fault-process-restart": "development",
+    "fam-dev-multi-recharge-closure": "development",
+    "fam-dev-multi-recharge-correction": "development",
+    "fam-dev-multi-recharge-negation": "development",
+    "fam-dev-multi-recharge-tried-advance": "development",
+    "fam-dev-multi-topic-switch-mop": "development",
+    "fam-dev-negation-filter-not-cleaned": "development",
+    "fam-hold-boundary-renovation-debris": "holdout",
+    "fam-hold-direct-charge-heat": "holdout",
+    "fam-hold-direct-edge-brush-wear": "holdout",
+    "fam-hold-fault-empty-retrieval": "holdout",
+    "fam-hold-multi-base-moved-remap": "holdout",
+    "fam-hold-multi-docking-alignment": "holdout",
+    "fam-hold-multi-switch-to-suction": "holdout",
+    "fam-hold-negation-battery-vs-base": "holdout"
+  },
+  "family_metadata": {
+    "fam-dev-direct-recharge-triage": {
+      "category": "direct_qa",
+      "split": "development",
+      "title": "回充失败的多分支低风险排查",
+      "oracle": "给出多分支低风险检查；不把清障当唯一首步或保证；不直接判硬件。",
+      "variant_budget": 2
+    },
+    "fam-dev-direct-mop-no-water": {
+      "category": "direct_qa",
+      "split": "development",
+      "title": "拖地不出水的水路低风险排查",
+      "oracle": "先查水箱、出水量、出水口/出水管/拖布湿润；不直接判水泵，不指导拆泵。",
+      "variant_budget": 2
+    },
+    "fam-dev-direct-suction-decline": {
+      "category": "direct_qa",
+      "split": "development",
+      "title": "吸力下降的堵塞/耗材优先排查",
+      "oracle": "先查尘盒、滤网、风道、主刷/吸口；滤网需干燥未破损；不先判电机。",
+      "variant_budget": 2
+    },
+    "fam-dev-direct-base-power": {
+      "category": "direct_qa",
+      "split": "development",
+      "title": "充电座指示灯不亮的供电链路排查",
+      "oracle": "先查电源线、插座、适配器和充电座；不拆充电座；损坏时原装更换/官方售后。",
+      "variant_budget": 2
+    },
+    "fam-dev-multi-recharge-tried-advance": {
+      "category": "multi_turn",
+      "split": "development",
+      "title": "已清障并擦触点后仍失败：推进而不是重复",
+      "oracle": "保留已试清障/擦触点/传感器，不重复为首要建议；转向供电、红外、摆放或手动放回。",
+      "variant_budget": 2
+    },
+    "fam-dev-multi-recharge-negation": {
+      "category": "multi_turn",
+      "split": "development",
+      "title": "用户明确否定未试：不能记成已试",
+      "oracle": "否定动作记为未试；先给低风险步骤；不跳售后；不重复已明确回答的追问。",
+      "variant_budget": 2
+    },
+    "fam-dev-multi-recharge-correction": {
+      "category": "multi_turn",
+      "split": "development",
+      "title": "用户更正已试事实：以最后一次明确陈述为准",
+      "oracle": "更正覆盖旧事实；不保留错误已试；不重复被更正掉的建议；不指责。",
+      "variant_budget": 2
+    },
+    "fam-dev-multi-recharge-closure": {
+      "category": "multi_turn",
+      "split": "development",
+      "title": "成功结案与“手动能充”假结案",
+      "oracle": "只有明确自动回充恢复才结案；手动放回能充电是部分成功，不能结案。",
+      "variant_budget": 2
+    },
+    "fam-dev-multi-topic-switch-mop": {
+      "category": "multi_turn",
+      "split": "development",
+      "title": "回充话题中切换到拖地故障",
+      "oracle": "切换主题不串来源；保留旧回充未解决；不把拖地问题归因回充传感器。",
+      "variant_budget": 2
+    },
+    "fam-dev-negation-filter-not-cleaned": {
+      "category": "negation_correction_ambiguity",
+      "split": "development",
+      "title": "吸力问题中“过滤网没清”被误当已清",
+      "oracle": "区分过滤网与尘盒；否定/更正为未清；不把助手建议升级成用户已做。",
+      "variant_budget": 2
+    },
+    "fam-dev-correction-mop-water-level": {
+      "category": "negation_correction_ambiguity",
+      "split": "development",
+      "title": "拖地不出水的水箱前提被更正",
+      "oracle": "更正水箱水位/安装前提；不继续按“水箱满/已装好”回答；下一步对准真实原因。",
+      "variant_budget": 2
+    },
+    "fam-dev-ambiguity-recharge-condition": {
+      "category": "negation_correction_ambiguity",
+      "split": "development",
+      "title": "回充指代/症状与90%/95%条件歧义",
+      "oracle": "先澄清指代/症状或条件；不把不同条件当同一矛盾；不合并成唯一数值。",
+      "variant_budget": 2
+    },
+    "fam-dev-boundary-unknown-model-price": {
+      "category": "missing_or_out_of_domain",
+      "split": "development",
+      "title": "未知型号价格/保修的语料覆盖边界",
+      "oracle": "说明语料覆盖不足；不给X99价格；通用保修不冒充官方承诺；不以top-k未命中当不存在证明。",
+      "variant_budget": 2
+    },
+    "fam-dev-boundary-out-of-domain": {
+      "category": "missing_or_out_of_domain",
+      "split": "development",
+      "title": "域外请求与账号能力边界",
+      "oracle": "只处理扫地/扫拖；不提供服装建议；不查账号/订单；不伪装已执行。",
+      "variant_budget": 2
+    },
+    "fam-dev-boundary-missing-context": {
+      "category": "missing_or_out_of_domain",
+      "split": "development",
+      "title": "开不了机/突然不动：缺上下文先追问",
+      "oracle": "先问指示灯、电量、供电、异响/进水等；不假设已试全部步骤；不猜主板。",
+      "variant_budget": 2
+    },
+    "fam-dev-fault-process-restart": {
+      "category": "fault_recovery",
+      "split": "development",
+      "title": "进程重启后的会话状态恢复与隔离",
+      "oracle": "同session恢复已试事实；新session不继承；重启不是任务成功；故障样本不进QA分母。",
+      "variant_budget": 2
+    },
+    "fam-hold-direct-charge-heat": {
+      "category": "direct_qa",
+      "split": "holdout",
+      "title": "充电座发热/异味的安全优先处理",
+      "oracle": "异常发热/焦味先停止充电、通风、查原装适配器/线缆；不拆机；鼓包/火花走官方售后。",
+      "variant_budget": 2
+    },
+    "fam-hold-direct-edge-brush-wear": {
+      "category": "direct_qa",
+      "split": "holdout",
+      "title": "边刷磨损判据与资料周期差异",
+      "oracle": "按刷毛<1cm/变形/断裂判断；周期资料有2-3月与6-12月差异，不写成唯一周期。",
+      "variant_budget": 2
+    },
+    "fam-hold-multi-base-moved-remap": {
+      "category": "multi_turn",
+      "split": "holdout",
+      "title": "搬家/挪动充电座后的回充与地图",
+      "oracle": "充电座位置变动需重新摆放/更新地图/检查红外；不重复只清障；不判主板。",
+      "variant_budget": 2
+    },
+    "fam-hold-multi-switch-to-suction": {
+      "category": "multi_turn",
+      "split": "holdout",
+      "title": "回充话题中切换到吸力下降",
+      "oracle": "切换至吸力主题查滤网/风道/主刷；保留回充任务；不把吸力归因回充传感器。",
+      "variant_budget": 2
+    },
+    "fam-hold-multi-docking-alignment": {
+      "category": "multi_turn",
+      "split": "holdout",
+      "title": "能到充电座前但对不准/碰撞",
+      "oracle": "区分找不到与对不准；查摆放平整、红外/触点、手动放回；不判主板。",
+      "variant_budget": 2
+    },
+    "fam-hold-boundary-renovation-debris": {
+      "category": "missing_or_out_of_domain",
+      "split": "holdout",
+      "title": "装修后开荒：能否直接用机器人",
+      "oracle": "先人工清水泥渣/沙粒/尖锐杂物；不直接用；避免刮伤/堵塞；开荒后再用。",
+      "variant_budget": 2
+    },
+    "fam-hold-negation-battery-vs-base": {
+      "category": "negation_correction_ambiguity",
+      "split": "holdout",
+      "title": "电池与充电座更换对象被说反",
+      "oracle": "以最后明确更正为准；区分换电池/换座；不重复被更正掉的建议；不判主板。",
+      "variant_budget": 2
+    },
+    "fam-hold-fault-empty-retrieval": {
+      "category": "fault_recovery",
+      "split": "holdout",
+      "title": "空检索注入：空结果不等于资料不存在",
+      "oracle": "明确本轮检索为空/失败；不编来源；可重试；重试后用真实来源；故障样本不进QA分母。",
+      "variant_budget": 2
+    }
+  },
+  "holdout_cases_sha256": "9aa281ffe0b0f4c3ef0ef63b9c81de8727f3ea4dbf25371f540def9511a12db1",
+  "cases_sha256": "f6972782c478fa799453fd83058533aca7efe892d3507c6abe63f2ee8402bd94",
+  "frozen_holdout": true,
+  "note": "holdout 已冻结；本轮只做 schema/证据完整检查，不运行、不据其调参。"
+}

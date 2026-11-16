@@ -1,0 +1,68 @@
+{
+  "schema_version": "question-lifecycle-development/v1",
+  "split": "development",
+  "purpose": "同族迁移案例与反例：待确认问题生命周期、slot 已回答/未回答、纠正重开、topic defer、routing 与 usage。不是 holdout，不是成功率，不用于调 holdout。",
+  "cases": [
+    {
+      "id": "ql-answered-slot-not-asked-again",
+      "turns": ["回充失败，找不到充电座", "机器人回不去了", "我已经清理了充电座周围，还是回不去"],
+      "expect": {
+        "first_route": "semantic",
+        "answered_slot": "dock_find_referent",
+        "answered_value": "robot_cannot_return",
+        "prompt_forbids_reask": true,
+        "tried": [["clear_dock_obstacles", "failed"]]
+      }
+    },
+    {
+      "id": "ql-unanswered-defer-then-blocked-not-answered",
+      "turns": ["回充失败，找不到充电座", "还是不行", "回充还是不行", "回充还是不行"],
+      "expect": {
+        "never_answered": "dock_find_referent",
+        "max_ask_count": 2,
+        "blocked_visible": true,
+        "final_status_in": ["deferred", "pending"]
+      }
+    },
+    {
+      "id": "ql-correction-reopens-with-evidence",
+      "turns": ["回充失败，找不到充电座", "机器人回不去了", "不对，我说错了，是我找不到充电座的位置"],
+      "expect": {
+        "answered_slot": "dock_find_referent",
+        "answered_value": "user_cannot_find_dock",
+        "old_answer_history": "robot_cannot_return",
+        "reopen_evidence": true
+      }
+    },
+    {
+      "id": "ql-topic-switch-defers-no-per-turn-reminder",
+      "turns": ["回充失败，找不到充电座", "机器人回不去了", "对了，拖地时水箱漏水怎么办？", "滤网多久换一次？"],
+      "expect": {
+        "scope_after_switch": "other",
+        "deferred_task_topic": "recharge_failure",
+        "old_task_status": "open",
+        "first_reminder_allowed": true,
+        "second_reminder_allowed": false
+      }
+    },
+    {
+      "id": "ql-thanks-is-not-resolution",
+      "turns": ["回充失败", "谢谢"],
+      "expect": {
+        "route_after": "protocol_ack",
+        "status": "active",
+        "closure_level": "weak_positive",
+        "no_model_route": true
+      }
+    },
+    {
+      "id": "ql-negation-not-swallowed",
+      "turns": ["回充失败，找不到充电座", "我没擦触点，还是不行"],
+      "expect": {
+        "route": "semantic",
+        "tried": [],
+        "not_tried": ["clean_contacts"]
+      }
+    }
+  ]
+}

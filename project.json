@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "schema_version": 1,
+  "name": "robot_vacuum",
+  "scenario": "robot_vacuum",
+  "project_name": "robot-vacuum-support",
+  "spec_root": ".",
+  "runtime_source": "runtime",
+  "frontend_source": "product_ui",
+  "default_workflow": "agent",
+  "source_artifact_id": "robot_vacuum-v1-7efe08f86d",
+  "source_content_hash": "78fed73a5bd75caebea24113368a4e7003f92e0fc1fd0d66a0abd76b21f05b54",
+  "source_schema_version": 2,
+  "source_scenario": "robot_vacuum",
+  "source_version": 1,
+  "dependencies_not_included": {
+    "knowledge": [],
+    "model": [],
+    "external": [
+      "deepseek deepseek-chat at https://api.deepseek.com: chat model API (network + credentials; supplied by instance environment_file, never copied)"
+    ]
+  },
+  "needs_configuration": [
+    "model_credentials: DEEPSEEK_API_KEY (instance environment_file, not copied)"
+  ],
+  "required_assets": [
+    {
+      "kind": "knowledge",
+      "required": true,
+      "reasons": [
+        "rag_summarize"
+      ]
+    },
+    {
+      "kind": "rag_index",
+      "required": true,
+      "reasons": [
+        "rag_summarize"
+      ]
+    },
+    {
+      "kind": "models",
+      "required": true,
+      "reasons": [
+        "local embedding model"
+      ]
+    }
+  ],
+  "asset_bindings": {},
+  "asset_source": {
+    "knowledge": [
+      "assets/knowledge"
+    ],
+    "models": [
+      "assets/models"
+    ],
+    "rag_index": [
+      "assets/rag_index"
+    ]
+  },
+  "include_assets": true,
+  "created_at": "2026-11-12T12:05:54+00:00"
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "instance_id": "robot-vacuum-support-local",
+  "artifact_id": "robot_vacuum-v4-<artifact-id>",
+  "artifact_root": "<absolute path to the built artifact>",
+  "name": "robot-vacuum-support-local",
+  "scenario": "robot_vacuum",
+  "version": 4,
+  "workflow": "agent",
+  "host": "127.0.0.1",
+  "port": 8902,
+  "storage_root": "<absolute path outside this repository>/storage",
+  "environment_file": "<absolute path outside this repository>/.env",
+  "asset_bindings": {}
+}

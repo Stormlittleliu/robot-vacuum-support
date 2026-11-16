@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instance Product</title>
+<style>
+  :root { color-scheme: light dark; --bg:#11151c; --panel:#18202b; --line:#2b3747; --text:#e8eef7; --muted:#93a1b5; --accent:#4f8cff; --danger:#d45454; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; background:var(--bg); color:var(--text); font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  aside { width:270px; border-right:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; padding:12px; gap:10px; }
+  main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  h1 { font-size:15px; margin:0; }
+  .meta { color:var(--muted); font-size:12px; word-break:break-all; }
+  .row { display:flex; gap:8px; }
+  button { background:#243244; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 10px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:#ffb4b4; border-color:#633535; }
+  select, textarea { width:100%; background:#0f141c; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; }
+  #sessions { list-style:none; padding:0; margin:0; overflow:auto; flex:1; }
+  #sessions li { padding:8px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+  #sessions li:hover, #sessions li.active { background:#202b3a; border-color:var(--line); }
+  #sessions .sid { font-family:ui-monospace,monospace; font-size:12px; }
+  #log { flex:1; overflow:auto; padding:18px 22px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:820px; white-space:pre-wrap; overflow-wrap:anywhere; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#161d27; }
+  .msg.user { align-self:flex-end; background:#1e3352; }
+  .msg.assistant { align-self:flex-start; }
+  .msg.system { align-self:center; color:var(--muted); background:transparent; border-style:dashed; }
+  .composer { border-top:1px solid var(--line); padding:12px; display:flex; gap:10px; background:var(--panel); }
+  .composer textarea { resize:vertical; min-height:58px; }
+  .composer .actions { display:flex; flex-direction:column; gap:8px; }
+  .approval { display:none; align-items:center; gap:8px; padding:10px 22px; border-top:1px solid var(--line); background:#2a2113; }
+  .approval.show { display:flex; }
+  .grow { flex:1; }
+  .support { display:none; border-top:1px solid var(--line); background:#141b24; padding:10px 22px; max-height:34vh; overflow:auto; }
+  .support.show { display:block; }
+  .support-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .support-head strong { font-size:13px; }
+  .badge { font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+  .support-grid { display:grid; grid-template-columns:minmax(130px,1fr) minmax(220px,2fr); gap:6px 12px; }
+  .support-label { color:var(--muted); font-size:12px; }
+  .support-value { word-break:break-word; }
+  .support ul { margin:0; padding-left:18px; }
+  .support li { margin:2px 0; }
+  .source { border:1px solid var(--line); border-radius:8px; padding:7px 9px; margin-top:6px; background:#111720; }
+  .source .name { font-family:ui-monospace,monospace; font-size:12px; color:#b9d4ff; }
+  .source .snippet { color:#cfd9e7; font-size:12px; margin-top:3px; white-space:pre-wrap; }
+  .notice { color:#ffd48a; font-size:12px; margin-top:6px; }
+  .handoff-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); background:#141b24; padding:8px 22px; }
+  .handoff-bar .meta { margin-left:auto; }
+  .handoff-text { white-space:pre-wrap; font-size:12px; background:#0f141c; border:1px solid var(--line); border-radius:8px; padding:8px 22px; margin:0; max-height:26vh; overflow:auto; }
+  .retry { color:#ffd48a; border-color:#6a5425; }
+</style>
+</head>
+<body>
+<aside>
+  <h1 id="product-name">Instance Product</h1>
+  <div class="meta" id="identity">loading…</div>
+  <select id="workflow" aria-label="workflow"></select>
+  <button class="primary" id="new-session">新建会话</button>
+  <div class="row">
+    <button id="reopen" title="重新打开当前会话">继续</button>
+    <button id="stop" title="停止当前运行">停止</button>
+    <button class="danger" id="end" title="结束当前会话（保留历史）">结束</button>
+  </div>
+  <div class="meta" id="readiness">读取状态…</div>
+  <ul id="sessions"></ul>
+</aside>
+<main>
+  <div id="log" aria-live="polite"></div>
+  <div class="approval" id="approval">
+    <span id="approval-text">需要审批</span>
+    <span class="grow"></span>
+    <button class="primary" id="approve">批准</button>
+    <button id="reject">拒绝</button>
+  </div>
+  <section class="support" id="support" aria-label="售后状态">
+    <div class="support-head">
+      <strong>售后状态</strong>
+      <span class="badge" id="support-stage">—</span>
+      <span class="meta" id="support-case"></span>
+    </div>
+    <div class="support-grid">
+      <div class="support-label">当前问题</div>
+      <div class="support-value" id="support-issue">—</div>
+      <div class="support-label">已试步骤</div>
+      <div class="support-value"><ul id="support-tried"></ul></div>
+      <div class="support-label">下一步</div>
+      <div class="support-value" id="support-next">—</div>
+      <div class="support-label">本轮来源片段</div>
+      <div class="support-value" id="support-sources"></div>
+    </div>
+  </section>
+  <div class="handoff-bar" id="handoff-bar">
+    <button id="handoff">整理转人工摘要</button>
+    <button id="handoff-copy" hidden>复制摘要</button>
+    <button id="handoff-download" hidden>下载 .txt</button>
+    <span class="meta" id="handoff-status">只在本机整理，不会自动发送</span>
+  </div>
+  <pre class="handoff-text" id="handoff-text" hidden></pre>
+  <div class="composer">
+    <textarea id="prompt" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+    <div class="actions">
+      <button class="primary" id="send">发送</button>
+      <button class="retry" id="retry" hidden>重试上一条</button>
+    </div>
+  </div>
+</main>
+<script>
+const state = { info:null, sessions:[], current:null, pending:null, busy:false, lastPrompt:"", handoff:null, sessionRequest:0 };
+const $ = (id) => document.getElementById(id);
+
+function text(node, value) { node.textContent = value == null ? "" : String(value); }
+
+function outcomeLabel(value) {
+  return value === "failed" ? "未恢复" : value === "success" ? "已恢复" : "结果未说明";
+}
+
+function renderSupport(support, retrieval) {
+  const panel = $("support");
+  const active = support && support.active_case;
+  if (!active) {
+    panel.classList.remove("show");
+    return;
+  }
+  panel.classList.add("show");
+  text($("support-stage"), active.stage === "resolved" ? "已结案" : active.stage === "need_info" ? "需确认" : "处理中");
+  text($("support-case"), active.case_id || "");
+  text($("support-issue"), (active.issue || "—") + (active.model ? " · 型号 " + active.model : ""));
+  const tried = $("support-tried");
+  tried.replaceChildren();
+  const rows = active.tried_actions || [];
+  if (!rows.length) {
+    const li = document.createElement("li"); text(li, "暂无用户确认执行过的步骤"); tried.appendChild(li);
+  } else {
+    for (const item of rows) {
+      const li = document.createElement("li");
+      const quote = item.evidence ? `；原话：“${item.evidence}”` : "";
+      text(li, `${item.label}：${outcomeLabel(item.outcome)}（第 ${item.source_turn || "?"} 轮${quote}）`);
+      tried.appendChild(li);
+    }
+  }
+  const next = active.next_step;
+  text($("support-next"), next ? `${next.label}${next.detail ? "：" + next.detail : ""}` : (active.status === "resolved" ? "已恢复，无需继续处理" : "—"));
+  const sourceBox = $("support-sources");
+  sourceBox.replaceChildren();
+  const evidence = (retrieval && retrieval.review) ? retrieval.review
+    : (active.last_retrieval && active.last_retrieval.review) ? active.last_retrieval.review : null;
+  const results = (active.last_retrieval && active.last_retrieval.results) || (retrieval && retrieval.results) || [];
+  if (!results.length) {
+    const hint = document.createElement("div"); hint.className = "notice";
+    text(hint, evidence && evidence.notice ? evidence.notice : "本轮没有可展示的检索原文片段。可以换一种问法重试。");
+    sourceBox.appendChild(hint);
+  } else {
+    for (const item of results) {
+      const box = document.createElement("div"); box.className = "source";
+      const name = document.createElement("div"); name.className = "name"; text(name, item.source || "未知来源");
+      const snippet = document.createElement("div"); snippet.className = "snippet"; text(snippet, item.snippet || "");
+      box.append(name, snippet); sourceBox.appendChild(box);
+    }
+    if (evidence && evidence.notice) {
+      const notice = document.createElement("div"); notice.className = "notice"; text(notice, evidence.notice);
+      sourceBox.appendChild(notice);
+    }
+  }
+}
+
+function clearHandoff() {
+  state.handoff = null;
+  $("handoff-text").hidden = true;
+  text($("handoff-text"), "");
+  $("handoff-copy").hidden = true;
+  $("handoff-download").hidden = true;
+  text($("handoff-status"), "只在本机整理，不会自动发送");
+}
+
+function handoffFilename(sessionId) {
+  const safe = String(sessionId || "session").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80) || "session";
+  return `handoff-${safe}.txt`;
+}
+
+async function requestHandoff() {
+  if (!state.current) return;
+  const sessionId = state.current;
+  const button = $("handoff");
+  button.disabled = true;
+  clearHandoff();
+  text($("handoff-status"), "正在整理…");
+  try {
+    const payload = await api(`/sessions/${encodeURIComponent(sessionId)}/handoff-summary`, { method:"POST" });
+    if (state.current !== sessionId) return;
+    const summaryText = (payload.summary || "") + "\n\n" + (payload.notice || "");
+    state.handoff = { sessionId, text: summaryText, filename: handoffFilename(sessionId) };
+    const box = $("handoff-text");
+    text(box, summaryText);
+    box.hidden = false;
+    $("handoff-copy").hidden = false;
+    $("handoff-download").hidden = false;
+    text($("handoff-status"), `已整理（未发送）· ${state.handoff.filename}`);
+  } catch (error) {
+    if (state.current === sessionId) {
+      text($("handoff-status"), "整理失败：" + error.message + "，可重试");
+      addMessage("system", "转人工摘要整理失败，可点击“整理转人工摘要”重试。");
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function copyHandoff() {
+  const handoff = state.handoff;
+  if (!handoff) return;
+  function legacyCopy() {
+    const area = document.createElement("textarea");
+    area.value = handoff.text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    if (!ok) throw new Error("clipboard unavailable");
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(handoff.text);
+      } catch (_) {
+        legacyCopy();
+      }
+    } else {
+      legacyCopy();
+    }
+    text($("handoff-status"), "已复制摘要（未发送）");
+  } catch (error) {
+    text($("handoff-status"), "复制失败：" + error.message + "，可重试");
+  }
+}
+
+function downloadHandoff() {
+  const handoff = state.handoff;
+  if (!handoff) return;
+  try {
+    const blob = new Blob([handoff.text], { type:"text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = handoff.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    text($("handoff-status"), `已导出 ${handoff.filename}（UTF-8）`);
+  } catch (error) {
+    text($("handoff-status"), "下载失败：" + error.message + "，可重试");
+  }
+}
+
+async function api(path, options = {}) {
+  const response = await fetch("/api" + path, { headers: {"Content-Type":"application/json"}, ...options });
+  let payload = null;
+  try { payload = await response.json(); } catch (_) {}
+  if (!response.ok) {
+    const detail = payload && payload.detail;
+    const message = typeof detail === "string" ? detail : (detail && detail.message) || JSON.stringify(payload || {});
+    throw new Error(message);
+  }
+  return payload;
+}
+
+function addMessage(role, content, extra) {
+  const node = document.createElement("div");
+  node.className = "msg " + (role === "user" ? "user" : role === "assistant" ? "assistant" : "system");
+  text(node, content);
+  if (extra) node.dataset.extra = extra;
+  $("log").appendChild(node);
+  $("log").scrollTop = $("log").scrollHeight;
+  return node;
+}
+
+function clearLog() { $("log").replaceChildren(); }
+
+async function loadInfo() {
+  state.info = await api("/instance");
+  text($("product-name"), state.info.name || state.info.scenario || "Instance Product");
+  text($("identity"), `${state.info.instance_id} · ${state.info.scenario} v${state.info.version} · ${state.info.api_version}`);
+  const health = state.info.readiness || {};
+  text($("readiness"), health.ready ? "就绪" : "降级：" + (health.missing || []).join(", "));
+  const select = $("workflow");
+  select.replaceChildren();
+  for (const workflow of state.info.workflows || []) {
+    const option = document.createElement("option");
+    option.value = workflow; text(option, workflow); select.appendChild(option);
+  }
+  if (state.info.default_workflow) select.value = state.info.default_workflow;
+}
+
+async function loadSessions() {
+  const payload = await api("/sessions");
+  state.sessions = payload.sessions || [];
+  const list = $("sessions");
+  list.replaceChildren();
+  for (const session of state.sessions) {
+    const item = document.createElement("li");
+    if (session.session_id === state.current) item.classList.add("active");
+    const sid = document.createElement("div"); sid.className = "sid"; text(sid, session.session_id);
+    const meta = document.createElement("div"); meta.className = "meta";
+    text(meta, `${session.status} · ${session.workflow || "-"} · ${(session.transcript || []).length || ""}`);
+    item.append(sid, meta);
+    item.onclick = () => openSession(session.session_id);
+    list.appendChild(item);
+  }
+}
+
+async function openSession(sessionId) {
+  state.current = sessionId;
+  const requestId = ++state.sessionRequest;
+  state.pending = null;
+  $("approval").classList.remove("show");
+  clearHandoff();
+  const session = await api(`/sessions/${encodeURIComponent(sessionId)}`);
+  if (state.current !== sessionId || requestId !== state.sessionRequest) return;
+  $("workflow").value = session.workflow || $("workflow").value;
+  clearLog();
+  for (const message of session.transcript || []) addMessage(message.role, message.content);
+  if (!session.transcript || !session.transcript.length) addMessage("system", "新会话已就绪。");
+  if (session.thread_id) state.pending = { thread_id: session.thread_id, stale: session.status === "ended" };
+  renderSupport(session.support, null);
+  await loadSessions();
+}
+
+async function createSession() {
+  const session = await api("/sessions", { method:"POST", body: JSON.stringify({ workflow: $("workflow").value || null }) });
+  await loadSessions();
+  await openSession(session.session_id);
+}
+
+function consumeSse(response, onEvent) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  return (async () => {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream:true });
+      let index;
+      while ((index = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, index); buffer = buffer.slice(index + 2);
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          try { onEvent(JSON.parse(line.slice(6))); } catch (_) {}
+        }
+      }
+    }
+  })();
+}
+
+async function sendMessage(prompt, action, payload) {
+  if (!state.current) await createSession();
+  if (state.busy) return;
+  const sessionId = state.current;
+  state.busy = true;
+  state.pending = null;
+  clearHandoff();
+  $("approval").classList.remove("show");
+  $("retry").hidden = true;
+  if (action === "run") {
+    state.lastPrompt = prompt;
+    addMessage("user", prompt);
+  }
+  const assistant = addMessage("assistant", "");
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/${action === "resume" ? "resume" : "messages"}`, {
+    method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    let detail = null; try { detail = await response.json(); } catch (_) {}
+    const message = (detail && detail.detail && detail.detail.message) || "请求失败";
+    text(assistant, "错误：" + message + (action === "run" ? "（可点“重试上一条”）" : ""));
+    if (action === "run") $("retry").hidden = false;
+    state.busy = false;
+    return;
+  }
+  let failed = false;
+  await consumeSse(response, (event) => {
+    if (event.type === "answer_delta") {
+      assistant.textContent += event.delta || "";
+      $("log").scrollTop = $("log").scrollHeight;
+    } else if (event.type === "answer") {
+      text(assistant, event.answer || assistant.textContent);
+      if (state.current === sessionId) renderSupport(event.support, event.retrieval);
+    } else if (event.type === "interrupt") {
+      text(assistant, event.answer || assistant.textContent);
+      if (state.current === sessionId) renderSupport(event.support, event.retrieval);
+      state.pending = { thread_id: event.thread_id, interrupt: event.interrupt };
+      const question = event.interrupt && (event.interrupt.question || event.interrupt.message);
+      text($("approval-text"), question ? String(question) : "该操作需要审批");
+      $("approval").classList.add("show");
+    } else if (event.type === "error") {
+      failed = true;
+      text(assistant, "错误：" + (event.error || "执行失败") + "（可重试）");
+      if (state.current === sessionId) renderSupport(event.support, event.retrieval);
+    } else if (event.type === "workspace") {
+      assistant.dataset.workspace = event.path || "";
+    }
+  });
+  if (failed && action === "run") $("retry").hidden = false;
+  state.busy = false;
+  await loadSessions();
+}
+
+$("new-session").onclick = () => createSession().catch((error) => alert(error.message));
+$("send").onclick = () => {
+  const prompt = $("prompt").value.trim();
+  if (!prompt) return;
+  $("prompt").value = "";
+  sendMessage(prompt, "run", { prompt }).catch((error) => addMessage("system", error.message));
+};
+$("prompt").addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("send").click(); }
+});
+$("approve").onclick = () => {
+  const pending = state.pending;
+  if (!pending) { addMessage("system", "审批已失效，请重新发送消息。"); $("approval").classList.remove("show"); return; }
+  $("approval").classList.remove("show");
+  sendMessage("", "resume", { thread_id: pending.thread_id, decision: true }).catch((error) => alert(error.message));
+};
+$("reject").onclick = () => {
+  const pending = state.pending;
+  if (!pending) { $("approval").classList.remove("show"); return; }
+  $("approval").classList.remove("show");
+  sendMessage("", "resume", { thread_id: pending.thread_id, decision: false }).catch((error) => alert(error.message));
+};
+$("retry").onclick = () => {
+  const prompt = state.lastPrompt;
+  if (!prompt) return;
+  $("retry").hidden = true;
+  sendMessage(prompt, "run", { prompt }).catch((error) => addMessage("system", error.message));
+};
+$("handoff").onclick = () => requestHandoff();
+$("handoff-copy").onclick = () => copyHandoff();
+$("handoff-download").onclick = () => downloadHandoff();
+$("stop").onclick = () => state.current && api(`/sessions/${encodeURIComponent(state.current)}/stop`, {method:"POST"}).then(loadSessions).catch((e) => alert(e.message));
+$("reopen").onclick = () => state.current && api(`/sessions/${encodeURIComponent(state.current)}/reopen`, {method:"POST"}).then(() => openSession(state.current)).catch((e) => alert(e.message));
+$("end").onclick = () => state.current && api(`/sessions/${encodeURIComponent(state.current)}`, {method:"DELETE"}).then(() => loadSessions()).catch((e) => alert(e.message));
+
+(async () => {
+  try {
+    await loadInfo();
+    await loadSessions();
+    if (state.sessions.length) await openSession(state.sessions[0].session_id);
+    else addMessage("system", "还没有会话，点击“新建会话”开始。");
+  } catch (error) {
+    addMessage("system", "实例加载失败：" + error.message);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>扫地机器人评测 · 人工审核</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">审</div>
+      <div>
+        <h1>扫地机器人评测 · 人工审核</h1>
+        <p class="sub">人工判定独立存放；不写回 dataset / run，不自动计入 Agent 得分。</p>
+      </div>
+    </div>
+    <div class="top-meta">
+      <div class="meta-pill"><span>数据版本</span><strong id="suite-revision">—</strong></div>
+      <div class="meta-pill"><span>数据集</span><strong id="cases-sha" title="">—</strong></div>
+      <div class="export-group">
+        <button class="btn ghost" id="export-json" title="导出全部人工记录、曝光事件和 hash">导出 JSON</button>
+        <button class="btn ghost" id="export-csv" title="UTF-8 BOM，保留备注换行与引号">导出 CSV</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="split-tabs" role="tablist" aria-label="数据集划分">
+        <button class="split-tab active" data-split="development" role="tab">开发集</button>
+        <button class="split-tab" data-split="holdout" id="holdout-tab" role="tab">留出集</button>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-head"><span>案例定义</span><span id="progress-definition-text">0 / 0</span></div>
+        <div class="progress-track"><div class="progress-fill definition" id="progress-definition-bar"></div></div>
+        <div class="progress-head"><span>运行回答</span><span id="progress-run-text">0 / 0</span></div>
+        <div class="progress-track"><div class="progress-fill run" id="progress-run-bar"></div></div>
+      </div>
+
+      <div class="toolbar">
+        <label class="sr-only" for="filter">筛选</label>
+        <select id="filter">
+          <option value="all">全部状态</option>
+          <option value="unreviewed">未审核</option>
+          <option value="passed">通过</option>
+          <option value="failed">不通过</option>
+          <option value="uncertain">存疑</option>
+        </select>
+        <span class="list-count" id="list-count">—</span>
+      </div>
+
+      <div id="holdout-gate" class="holdout-gate" hidden>
+        <div class="gate-icon">隐</div>
+        <h2>留出集默认隐藏</h2>
+        <p>查看会暴露 <span id="holdout-count">0</span> 条留出题的题目、expected claims / behaviors / state 与来源预期。首次查看会记录一条曝光事件。</p>
+        <p class="gate-warn">不会自动运行留出集，不会修改 split 或冻结文件；曝光记录会随导出一起保存。</p>
+        <button class="btn danger" id="holdout-reveal">查看留出集并记录曝光</button>
+      </div>
+
+      <div class="case-list" id="case-list" aria-label="案例列表"></div>
+    </aside>
+
+    <section class="workspace">
+      <div class="scope-switch scope-switch-global" role="tablist" aria-label="审核对象">
+        <button class="scope-card active" id="scope-case_definition" data-scope="case_definition" role="tab" aria-selected="true">
+          <span class="scope-kicker">审核对象 A</span>
+          <strong>案例定义</strong>
+          <small>题目、期望 claims / behaviors / state、来源引文是否合理</small>
+        </button>
+        <button class="scope-card" id="scope-run_answer" data-scope="run_answer" role="tab" aria-selected="false">
+          <span class="scope-kicker">审核对象 B</span>
+          <strong>审核运行回答</strong>
+          <small>优先看某个 run 的 Agent 实际回答，不拿 expected 当 actual</small>
+        </button>
+      </div>
+
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">◌</div>
+        <h2>选择左侧案例开始审核</h2>
+        <p>案例定义与运行回答是两个独立审核对象，分别保存，不互相覆盖。</p>
+        <div class="empty-actions">
+          <button class="btn primary" id="empty-run-entry" type="button">审核运行回答</button>
+          <span class="empty-entry-hint">直接打开一个已有 run 的实际回答；expected 仍只作对照。</span>
+        </div>
+      </div>
+
+      <div id="case-view" hidden>
+        <div class="case-head">
+          <div class="case-title-row">
+            <div>
+              <div class="eyebrow" id="case-eyebrow">—</div>
+              <h2 id="case-title">—</h2>
+            </div>
+            <div class="case-nav">
+              <button class="btn ghost" id="prev-btn" title="上一条 (Alt+←)">← 上一条</button>
+              <button class="btn ghost" id="next-btn" title="下一条 (Alt+→)">下一条 →</button>
+            </div>
+          </div>
+          <div class="case-facts">
+            <span class="fact"><span>case id</span><code id="case-id">—</code></span>
+            <span class="fact"><span>category</span><code id="case-category">—</code></span>
+            <span class="fact"><span>split</span><code id="case-split">—</code></span>
+            <span class="fact"><span>caseHash</span><code id="case-hash" title="">—</code></span>
+            <span class="fact"><span>suite</span><code id="case-suite">—</code></span>
+          </div>
+          <button class="hash-details" id="hash-details" type="button">查看数据集 hash / 版本绑定</button>
+          <div class="hash-panel" id="hash-panel" hidden></div>
+        </div>
+
+        <div class="content-grid">
+          <div class="main-column" id="main-column">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>对话与预期</h3>
+                <span class="panel-note" id="turn-count">—</span>
+              </div>
+              <div id="turns"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h3>真实来源文件 / quote</h3>
+                <span class="panel-note">数据来自 case.evidence；不读取任意文件</span>
+              </div>
+              <div id="evidence-list" class="evidence-list"></div>
+            </section>
+
+            <section class="panel run-panel" id="run-panel">
+              <div class="panel-head">
+                <h3 id="run-panel-title">运行快照（只读）</h3>
+                <span class="panel-note" id="run-panel-note">只展示已有 development 运行</span>
+              </div>
+              <div id="run-body"></div>
+            </section>
+
+            <section class="panel judge-panel" id="judge-panel">
+              <div class="panel-head">
+                <h3>Judge 独立建议（只读）</h3>
+                <span class="panel-note" id="judge-panel-note">dsh-judge/v1 · 不写人工状态 / 备注</span>
+              </div>
+              <div id="judge-body">
+                <div class="judge-empty" data-judge-empty="loading">
+                  <strong>加载 Judge 结果…</strong>
+                  <div>只读已完成的 DSH Judge 结果；不会触发模型，也不改人工判定。</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="review-column">
+            <div class="review-card">
+              <div class="review-card-head">
+                <div>
+                  <div class="eyebrow">当前审核对象</div>
+                  <h3 id="review-target-title">案例定义</h3>
+                  <p id="review-target-sub">独立保存，不与运行回答共用判定</p>
+                </div>
+                <span class="dirty-dot" id="dirty-dot" title="未保存" hidden></span>
+              </div>
+
+              <fieldset class="status-field">
+                <legend>判定 <span class="required">必选</span></legend>
+                <div class="status-buttons" id="status-buttons">
+                  <button type="button" class="status-btn passed" data-status="passed">通过</button>
+                  <button type="button" class="status-btn failed" data-status="failed">不通过</button>
+                  <button type="button" class="status-btn uncertain" data-status="uncertain">存疑</button>
+                </div>
+                <p class="hint">初始为未审核；只有你主动保存后才算已审核。</p>
+              </fieldset>
+
+              <div class="field">
+                <label for="notes">备注 <span class="hint-inline">支持多行、引号；可写分歧与证据缺口</span></label>
+                <textarea id="notes" rows="7" maxlength="20000" placeholder="例如：required claim 2 与来源不完全一致；建议补证据。&#10;第二行也可以写。"></textarea>
+              </div>
+
+              <div class="field">
+                <label for="reviewer">审核人</label>
+                <input id="reviewer" type="text" maxlength="100" value="local-user" autocomplete="off">
+              </div>
+
+              <div class="save-row">
+                <button class="btn primary" id="save-btn" disabled>保存审核</button>
+                <span class="save-state" id="save-state" data-state="idle" aria-live="polite">尚未保存</span>
+              </div>
+              <div class="saved-line" id="saved-line">未审核 · 尚无保存记录</div>
+
+              <div class="conflict" id="conflict" hidden>
+                <strong>保存冲突 / 版本变化</strong>
+                <p id="conflict-message"></p>
+                <div class="conflict-actions">
+                  <button class="btn small" id="conflict-reload">加载服务端最新记录</button>
+                  <span>本地输入保留，不静默覆盖。</span>
+                </div>
+              </div>
+
+              <div class="draft-note" id="draft-note" hidden></div>
+
+              <details class="history" id="history-box">
+                <summary>历史快照 / 旧 hash 记录 <span id="history-count">0</span></summary>
+                <div id="history-list" class="history-list"></div>
+              </details>
+
+              <div class="shortcut-note">可选快捷键：Ctrl+S 保存；Alt+← / Alt+→ 切题。切换未保存内容会提示，草稿保留在本地。</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

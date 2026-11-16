@@ -1,0 +1,823 @@
+{
+  "schema_version": "rotating-mainline-cases/v1",
+  "suite_id": "rotating-mainline-v1",
+  "revision": "v1",
+  "created_at": "2026-11-15",
+  "purpose": "固定 12 session 的轮换主线验收集：6 条回充主线复用已有 grounded development 场景，6 条广度题各覆盖一份知识文档。development advisory，不是 holdout，不是成功率。",
+  "cases": [
+    {
+      "id": "rm-recharge-multiround-correction",
+      "family_id": "rm-recharge-correction",
+      "group": "recharge_mainline",
+      "topic": "recharge_failure",
+      "theme": "multiround_correction",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "existing_grounded_development_case",
+        "origin_case_id": "fb-correction-execution-outcome-01",
+        "origin_file": "outputs/fact-boundary-closeout-v1/live/input-freeze.json",
+        "origin_run_id": "fact-boundary-closeout-v1",
+        "origin_session_id": "s-2ff01a4cb7dd47c5",
+        "origin_artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+        "reuse": "复制已有 user turns；期望改写为有边界的 development oracle；原文件、原 session、原 run 不修改。"
+      },
+      "origin": {
+        "kind": "existing_grounded_case_reuse",
+        "case_provenance": "real_session_projection",
+        "grounding": "prior real model run on robot_vacuum-v4-6aa0ba49c6"
+      },
+      "generation": {
+        "method": "reuse_existing_turns_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "correction retracts a tried action and its failed outcome"
+      },
+      "scoring_method": {
+        "program": "structural state subset + answer nonempty + retrieval attempted",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "我已经把它放回充电座了，但还是充不上电。",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_contains": [
+                {"action_id": "reseat_dock", "outcome": "failed"}
+              ],
+              "observation_contains": [
+                {"capability": "manual_charging", "result": "fails"}
+              ]
+            }
+          }
+        },
+        {
+          "role": "user",
+          "content": "更正一下，刚才说错了：其实我没有把它放回充电座，只是按了回充键，自动回充也还没再试。",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_absent": ["reseat_dock"],
+              "not_tried_actions_contains": ["reseat_dock", "check_auto_return"]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "第1轮承认手动放回已试且失败，保持未解决；第2轮接受更正、撤回已试事实，明确两项都还没验证，并给一个最低成本下一步。",
+        "next_actions": ["重新确认自动回充是否被关闭或充电座位置是否改动", "只做一次能区分的观察"],
+        "must_not_claim": [
+          "不得把更正前的失败继续当成用户已试事实",
+          "不得宣称已解决或原因已确认",
+          "不得把助手建议当成用户已执行"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183, item 91",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; 原 frozen v1 review/holdout 未触碰"
+      }
+    },
+    {
+      "id": "rm-recharge-local-vs-global-success",
+      "family_id": "rm-recharge-local-global",
+      "group": "recharge_mainline",
+      "topic": "recharge_failure",
+      "theme": "local_vs_global_success",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "existing_grounded_development_case",
+        "origin_case_id": "ds-live-manual-works-auto-fails-01",
+        "origin_file": "outputs/diagnostic-scope-after-review-v2-validated/dataset/cases.jsonl",
+        "origin_run_id": "diagnostic-scope-smoke-v2",
+        "origin_session_id": "s-ae87bf540cc44c5e",
+        "origin_artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+        "reuse": "复制已有 user turn；期望改写为有边界的 development oracle；原 dataset/run 不修改。"
+      },
+      "origin": {
+        "kind": "existing_grounded_case_reuse",
+        "case_provenance": "real_session_projection",
+        "grounding": "prior real model run on robot_vacuum-v4-6aa0ba49c6"
+      },
+      "generation": {
+        "method": "reuse_existing_turn_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "manual charging is local, automatic return still fails"
+      },
+      "scoring_method": {
+        "program": "structural state subset + answer nonempty + retrieval attempted",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "自动回充还是失败，但我手动把机器人放到充电座上就能充电。是不是证明触点问题已经解决，接下来不用管了？",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "observation_contains": [
+                {"capability": "manual_charging", "result": "works"},
+                {"capability": "automatic_return", "result": "fails"}
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "明确手动能充只是局部结果，不能证明触点问题已解决；自动回充仍失败，任务保持未解决；给一个能区分原因的下一次观察。",
+        "next_actions": ["在不手动摆放的情况下再试一次自动回充", "观察是找不到座、在座附近打转还是对准后不充电"],
+        "must_not_claim": [
+          "不得说触点问题已经解决或可以不用管",
+          "不得把局部手动成功当成全局自动恢复",
+          "不得宣称唯一原因已确认"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183, item 91",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        },
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 21, item 10",
+          "quote": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清理充电座周围3米内障碍物，擦拭回充传感器，重新摆放充电座。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; 原 frozen v1 review/holdout 未触碰"
+      }
+    },
+    {
+      "id": "rm-recharge-failed-outcome",
+      "family_id": "rm-recharge-failed-outcome",
+      "group": "recharge_mainline",
+      "topic": "recharge_failure",
+      "theme": "failed_outcome",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "existing_grounded_development_case",
+        "origin_case_id": "fb-partial-place-vs-align-01",
+        "origin_file": "outputs/fact-boundary-closeout-v1/live/input-freeze.json",
+        "origin_run_id": "fact-boundary-closeout-v1",
+        "origin_session_id": "s-1f85ce8843f6441e",
+        "origin_artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+        "reuse": "复制已有 2 个 user turns；期望改写为有边界的 development oracle；原文件、原 session、原 run 不修改。"
+      },
+      "origin": {
+        "kind": "existing_grounded_case_reuse",
+        "case_provenance": "real_session_projection",
+        "grounding": "prior real model run on robot_vacuum-v4-6aa0ba49c6"
+      },
+      "generation": {
+        "method": "reuse_existing_turns_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "partial placing vs explicit alignment with failed outcome"
+      },
+      "scoring_method": {
+        "program": "structural state subset + answer nonempty + retrieval attempted",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "我没有特意对准，只是把机器人随手放上充电座，结果还是充不上电。这样算试过重新对准吗？",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_contains": [
+                {"action_id": "reseat_dock", "outcome": "failed"}
+              ],
+              "observation_contains": [
+                {"capability": "manual_charging", "result": "fails"}
+              ]
+            }
+          }
+        },
+        {
+          "role": "user",
+          "content": "这次我特意把它对准充电极片放回充电座了，还是充不上电。",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_contains": [
+                {"action_id": "reseat_dock", "outcome": "failed"}
+              ],
+              "observation_contains": [
+                {"capability": "manual_charging", "result": "fails"}
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "第1轮区分随手放上和对准是不同动作，并保留手动放置失败；第2轮承认这次确实对准且仍失败，保持未解决、原因未确认，再给下一步。",
+        "next_actions": ["检查充电座供电/指示灯与触点", "根据观察再决定清洁或送修"],
+        "must_not_claim": [
+          "不得把随手放上直接当成已重新对准",
+          "不得忽略已发生的失败结果",
+          "不得宣称唯一原因已确认"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183, item 91",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        },
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 237, item 118",
+          "quote": "118. 故障现象：机器人无法识别充电座，碰撞充电座；检测：充电座是否摆放平整，回充传感器是否故障；修复：调整充电座位置，擦拭传感器，检测传感器功能。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; 原 frozen v1 review/holdout 未触碰"
+      }
+    },
+    {
+      "id": "rm-recharge-hypothetical-third-party",
+      "family_id": "rm-recharge-third-party",
+      "group": "recharge_mainline",
+      "topic": "recharge_failure",
+      "theme": "hypothetical_third_party",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "existing_grounded_development_case",
+        "origin_case_id": "fb-third-party-hypothetical-01",
+        "origin_file": "outputs/fact-boundary-closeout-v1/live/input-freeze.json",
+        "origin_run_id": "fact-boundary-closeout-v1",
+        "origin_session_id": "s-245954e2f07843a2",
+        "origin_artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+        "reuse": "复制已有 user turn；期望改写为有边界的 development oracle；原文件、原 session、原 run 不修改。"
+      },
+      "origin": {
+        "kind": "existing_grounded_case_reuse",
+        "case_provenance": "real_session_projection",
+        "grounding": "prior real model run on robot_vacuum-v4-6aa0ba49c6"
+      },
+      "generation": {
+        "method": "reuse_existing_turn_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "hypothetical third-party report must not become the current user's fact"
+      },
+      "scoring_method": {
+        "program": "structural state subset + answer nonempty + retrieval attempted",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "如果朋友家的机器人也是自动回充失败，手动放上去能充，是不是就说明我家的充电座没问题？",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_absent": ["reseat_dock"],
+              "observation_absent": [
+                {"capability": "manual_charging", "result": "works"}
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "拒绝把朋友家/假设情境的结果迁移到用户家；不生成当前用户已执行事实；用户自己的充电座仍未验证，给一个可观察的下一步。",
+        "next_actions": ["让用户自己的机器人自动回充一次并观察结果"],
+        "must_not_claim": [
+          "不得说用户家充电座没问题或问题在机器人",
+          "不得把朋友家的手动能充记成用户的手动能充",
+          "不得宣称原因已确认"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183, item 91",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; 原 frozen v1 review/holdout 未触碰"
+      }
+    },
+    {
+      "id": "rm-recharge-explicit-recovery",
+      "family_id": "rm-recharge-explicit-recovery",
+      "group": "recharge_mainline",
+      "topic": "recharge_failure",
+      "theme": "explicit_recovery",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "existing_grounded_development_case",
+        "origin_case_id": "fb-explicit-auto-recovery-01",
+        "origin_file": "outputs/fact-boundary-closeout-v1/live/input-freeze.json",
+        "origin_run_id": "fact-boundary-closeout-v1",
+        "origin_session_id": "s-d1c9654862a94eb3",
+        "origin_artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+        "reuse": "复制已有 user turn；期望改写为有边界的 development oracle；原文件、原 session、原 run 不修改。"
+      },
+      "origin": {
+        "kind": "existing_grounded_case_reuse",
+        "case_provenance": "real_session_projection",
+        "grounding": "prior real model run on robot_vacuum-v4-6aa0ba49c6"
+      },
+      "generation": {
+        "method": "reuse_existing_turn_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "explicit autonomous recovery is a positive control"
+      },
+      "scoring_method": {
+        "program": "structural state subset + answer nonempty + retrieval attempted",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "刚才我让机器人自己回充，它已经自己找到充电座并开始充电了。",
+          "expect": {
+            "state": {
+              "case_status": "resolved",
+              "resolved": true,
+              "closure_level": "explicit_success",
+              "observation_contains": [
+                {"capability": "automatic_return", "result": "works"}
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "确认自动回充恢复并结案；同时保持原因未确认，不把恢复说成某个零件故障已被证明。",
+        "next_actions": ["观察后续几次自动回充是否稳定"],
+        "must_not_claim": [
+          "不得宣称唯一故障原因已确认",
+          "不得把结案写成所有潜在问题都已排除"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183, item 91",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; 原 frozen v1 review/holdout 未触碰"
+      }
+    },
+    {
+      "id": "rm-recharge-unresolved-conversation",
+      "family_id": "rm-recharge-unresolved",
+      "group": "recharge_mainline",
+      "topic": "recharge_failure",
+      "theme": "unresolved_conversation",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "existing_grounded_development_case",
+        "origin_case_id": "ds-live-clearance-manual-only-01",
+        "origin_file": "outputs/diagnostic-scope-after-review-v2-validated/dataset/cases.jsonl",
+        "origin_run_id": "diagnostic-scope-smoke-v2",
+        "origin_session_id": "s-ad1cd2773bb54a50",
+        "origin_artifact_id": "robot_vacuum-v4-6aa0ba49c6",
+        "reuse": "复制已有 user turn；期望改写为有边界的 development oracle；原 dataset/run 不修改。"
+      },
+      "origin": {
+        "kind": "existing_grounded_case_reuse",
+        "case_provenance": "real_session_projection",
+        "grounding": "prior real model run on robot_vacuum-v4-6aa0ba49c6"
+      },
+      "generation": {
+        "method": "reuse_existing_turn_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "unresolved case with clearance + manual charging but no automatic-return test"
+      },
+      "scoring_method": {
+        "program": "structural state subset + answer nonempty + retrieval attempted",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "我已经清了充电座周围，手动放回可以充电，但还没试过让它自己回去。现在能确定就是遮挡造成的吗？",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_contains": [
+                {"action_id": "clear_dock_obstacles", "outcome": "unknown"}
+              ],
+              "not_tried_actions_contains": ["check_auto_return"],
+              "observation_contains": [
+                {"capability": "manual_charging", "result": "works"}
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "明确还不能确定是遮挡造成；清障和手动能充只是局部信息，自动回充尚未测试；保持未解决并给出一次自动回充观察。",
+        "next_actions": ["在不再手动摆放的情况下让机器人自动回充一次", "记录是否能自己找到座并开始充电"],
+        "must_not_claim": [
+          "不得在自动回充未测试时宣称遮挡是唯一原因",
+          "不得把手动充电成功当成任务已解决"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 21, item 10",
+          "quote": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清理充电座周围3米内障碍物，擦拭回充传感器，重新摆放充电座。"
+        },
+        {
+          "file": "assets/knowledge/扫地机器人100问2.txt",
+          "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+          "locator": "line 7, item 3",
+          "quote": "3. **机器人找不到充电座怎么处理？**"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; 原 frozen v1 review/holdout 未触碰"
+      }
+    },
+    {
+      "id": "rm-breadth-troubleshooting-suction",
+      "family_id": "rm-breadth-suction",
+      "group": "breadth_primary_document",
+      "topic": "suction_drop",
+      "theme": "breadth_fault_troubleshooting",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "authoritative_document",
+        "primary_document": "assets/knowledge/故障排除.txt",
+        "locator": "line 15, item 7",
+        "extraction": "utf-8 text"
+      },
+      "origin": {
+        "kind": "agent_generated_from_authoritative_document",
+        "case_provenance": "document_grounded_breadth",
+        "grounding": "exact quote in assets/knowledge/故障排除.txt"
+      },
+      "generation": {
+        "method": "one_document_one_question_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "suction drop troubleshooting order"
+      },
+      "scoring_method": {
+        "program": "structural answer nonempty + retrieval attempted + primary document evidence binding",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "机器人最近吸力明显下降，尘盒刚清理过。应该按什么顺序检查？",
+          "expect": {
+            "answer_nonempty": true,
+            "retrieval_attempted": true,
+            "primary_document_evidence": true
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "按尘盒/滤网/风道堵塞、主刷缠绕、吸口遮挡的顺序检查；逐项清理，剪断主刷毛发，确认吸口无异物。",
+        "next_actions": ["检查滤网和风道", "检查主刷缠绕", "检查吸口遮挡"],
+        "must_not_claim": [
+          "不得只归因于一个未检查的零件",
+          "不得建议拆机或更换未验证的电机"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 15, item 7",
+          "quote": "7. 故障现象：吸力明显下降；检测：尘盒、滤网、风道是否堵塞，主刷是否缠绕杂物，吸口是否被遮挡；修复：逐一清理堵塞部位，剪断主刷缠绕毛发，检查吸口无异物。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; breadth content is non-recharge"
+      }
+    },
+    {
+      "id": "rm-breadth-pdf-3d-structured-light",
+      "family_id": "rm-breadth-3d-structured-light",
+      "group": "breadth_primary_document",
+      "topic": "obstacle_avoidance",
+      "theme": "breadth_pdf_technology",
+      "primary_document": "assets/knowledge/扫地机器人100问.pdf",
+      "source": {
+        "kind": "authoritative_document",
+        "primary_document": "assets/knowledge/扫地机器人100问.pdf",
+        "locator": "pdftotext -layout line 174, PDF page 4, question 50",
+        "extraction": "pdftotext -enc UTF-8 -layout plus pypdf text view",
+        "pdf_overlap": "selected quote not found in the five .txt knowledge documents; recorded as no exact duplicate"
+      },
+      "origin": {
+        "kind": "agent_generated_from_authoritative_document",
+        "case_provenance": "document_grounded_breadth",
+        "grounding": "exact quote in PDF extraction; extraction method recorded"
+      },
+      "generation": {
+        "method": "one_document_one_question_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "3D structured light obstacle avoidance principle"
+      },
+      "scoring_method": {
+        "program": "structural answer nonempty + retrieval attempted + primary document evidence binding",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "3D结构光避障是怎么测距和避障的？",
+          "expect": {
+            "answer_nonempty": true,
+            "retrieval_attempted": true,
+            "primary_document_evidence": true
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "用红外点阵投影测量物体的距离和形状，据此实现精准避障。",
+        "next_actions": ["按资料解释原理即可，不扩展到未给出的具体算法或型号参数"],
+        "must_not_claim": [
+          "不得编造资料没有的测距数值、算法或硬件型号",
+          "不得把原理说明写成对所有机型都适用的绝对结论"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/扫地机器人100问.pdf",
+          "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+          "locator": "pdftotext -layout line 174, PDF page 4, question 50",
+          "quote": "通过红外点阵投影测量物体距离和形状，实现精准避障。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; PDF quote checked against both pdftotext and pypdf views"
+      }
+    },
+    {
+      "id": "rm-breadth-100q2-frequent-pause",
+      "family_id": "rm-breadth-frequent-pause",
+      "group": "breadth_primary_document",
+      "topic": "frequent_pause",
+      "theme": "breadth_100q2_troubleshooting",
+      "primary_document": "assets/knowledge/扫地机器人100问2.txt",
+      "source": {
+        "kind": "authoritative_document",
+        "primary_document": "assets/knowledge/扫地机器人100问2.txt",
+        "locator": "line 14, item 6",
+        "extraction": "utf-8 text"
+      },
+      "origin": {
+        "kind": "agent_generated_from_authoritative_document",
+        "case_provenance": "document_grounded_breadth",
+        "grounding": "exact quote in assets/knowledge/扫地机器人100问2.txt"
+      },
+      "generation": {
+        "method": "one_document_one_question_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "frequent pause causes and first checks"
+      },
+      "scoring_method": {
+        "program": "structural answer nonempty + retrieval attempted + primary document evidence binding",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "机器人清扫时老是频繁暂停，可能是什么原因，先检查什么？",
+          "expect": {
+            "answer_nonempty": true,
+            "retrieval_attempted": true,
+            "primary_document_evidence": true
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "先查尘盒、滤网是否堵塞，电量是否不足，机身传感器是否被灰尘遮挡；清洁后重试。",
+        "next_actions": ["清理尘盒和滤网", "确认电量", "擦拭机身传感器"],
+        "must_not_claim": [
+          "不得直接断定是电机或主板故障",
+          "不得建议跳过基础检查直接送修"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/扫地机器人100问2.txt",
+          "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+          "locator": "line 14, item 6",
+          "quote": "检查尘盒、滤网是否堵塞，电量是否不足，机身传感器是否被灰尘遮挡，清洁后重试。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; breadth content is non-recharge"
+      }
+    },
+    {
+      "id": "rm-breadth-wetdry-wood-floor-warp",
+      "family_id": "rm-breadth-wood-floor",
+      "group": "breadth_primary_document",
+      "topic": "wood_floor_mopping",
+      "theme": "breadth_wetdry_floor_care",
+      "primary_document": "assets/knowledge/扫拖一体机器人100问.txt",
+      "source": {
+        "kind": "authoritative_document",
+        "primary_document": "assets/knowledge/扫拖一体机器人100问.txt",
+        "locator": "line 68, item 31",
+        "extraction": "utf-8 text"
+      },
+      "origin": {
+        "kind": "agent_generated_from_authoritative_document",
+        "case_provenance": "document_grounded_breadth",
+        "grounding": "exact quote in assets/knowledge/扫拖一体机器人100问.txt"
+      },
+      "generation": {
+        "method": "one_document_one_question_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "wood floor warping after mopping"
+      },
+      "scoring_method": {
+        "program": "structural answer nonempty + retrieval attempted + primary document evidence binding",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "木地板拖完有点起翘、变形，现在该怎么处理，之后拖地要注意什么？",
+          "expect": {
+            "answer_nonempty": true,
+            "retrieval_attempted": true,
+            "primary_document_evidence": true
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "立即用干布吸干表面水分并开窗通风；之后改用干拖或最低档出水量，避免地面积水。",
+        "next_actions": ["吸干表面水分", "通风", "后续降低出水量"],
+        "must_not_claim": [
+          "不得建议继续用高档出水量反复拖",
+          "不得把起翘原因说成已确认的单一结构问题"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/扫拖一体机器人100问.txt",
+          "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+          "locator": "line 68, item 31",
+          "quote": "立即用干布吸干木地板表面水分，打开门窗通风；后续拖地时调至“干拖”或最低档出水量，避免地面积水。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; breadth content is non-recharge"
+      }
+    },
+    {
+      "id": "rm-breadth-maintenance-empty-run",
+      "family_id": "rm-breadth-maintenance",
+      "group": "breadth_primary_document",
+      "topic": "maintenance_check",
+      "theme": "breadth_maintenance",
+      "primary_document": "assets/knowledge/维护保养.txt",
+      "source": {
+        "kind": "authoritative_document",
+        "primary_document": "assets/knowledge/维护保养.txt",
+        "locator": "line 45, item 43",
+        "extraction": "utf-8 text"
+      },
+      "origin": {
+        "kind": "agent_generated_from_authoritative_document",
+        "case_provenance": "document_grounded_breadth",
+        "grounding": "exact quote in assets/knowledge/维护保养.txt"
+      },
+      "generation": {
+        "method": "one_document_one_question_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "monthly no-load empty-run check"
+      },
+      "scoring_method": {
+        "program": "structural answer nonempty + retrieval attempted + primary document evidence binding",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "想定期检查电机和轮组有没有隐患，空转测试应该怎么做？",
+          "expect": {
+            "answer_nonempty": true,
+            "retrieval_attempted": true,
+            "primary_document_evidence": true
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "每月做一次；无负载开机运行 1 分钟，检查有无异响、卡顿。",
+        "next_actions": ["每月一次", "无负载运行 1 分钟", "听异响并观察卡顿"],
+        "must_not_claim": [
+          "不得建议带负载或长时间空转",
+          "不得把空转测试说成能替代故障维修"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 45, item 43",
+          "quote": "每月对机器人进行一次“空转测试”，无负载开机运行1分钟，检查有无异响、卡顿。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; breadth content is non-recharge"
+      }
+    },
+    {
+      "id": "rm-breadth-selection-bedroom-noise",
+      "family_id": "rm-breadth-noise",
+      "group": "breadth_primary_document",
+      "topic": "selection_noise",
+      "theme": "breadth_selection",
+      "primary_document": "assets/knowledge/选购指南.txt",
+      "source": {
+        "kind": "authoritative_document",
+        "primary_document": "assets/knowledge/选购指南.txt",
+        "locator": "line 37, item 18",
+        "extraction": "utf-8 text"
+      },
+      "origin": {
+        "kind": "agent_generated_from_authoritative_document",
+        "case_provenance": "document_grounded_breadth",
+        "grounding": "exact quote in assets/knowledge/选购指南.txt"
+      },
+      "generation": {
+        "method": "one_document_one_question_no_new_multi_to_multi",
+        "created_by": "agent",
+        "focus": "bedroom noise selection threshold"
+      },
+      "scoring_method": {
+        "program": "structural answer nonempty + retrieval attempted + primary document evidence binding",
+        "semantic": "agent inspection advisory only; not an authoritative Judge pass"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "卧室用，扫地机器人的工作噪音选多少比较合适？",
+          "expect": {
+            "answer_nonempty": true,
+            "retrieval_attempted": true,
+            "primary_document_evidence": true
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "工作噪音≤55dB 更适合卧室；地毯模式噪音会升高；优先选降噪电机机型。",
+        "next_actions": ["把≤55dB作为卧室优先参考", "确认地毯模式噪音", "优先降噪电机"],
+        "must_not_claim": [
+          "不得把55dB说成所有模式和所有机型的绝对保证",
+          "不得编造具体型号的实测噪音"
+        ]
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/选购指南.txt",
+          "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+          "locator": "line 37, item 18",
+          "quote": "工作噪音≤55dB更适合卧室使用，地毯模式噪音会升高，优先选降噪电机机型。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; breadth content is non-recharge"
+      }
+    }
+  ]
+}
