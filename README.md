@@ -98,7 +98,8 @@ Invoke-RestMethod http://127.0.0.1:8902/api/instance
 
 ## Demo 与案例
 
-- [Demo 台本：6 个场景、停止条件、真实回答边界](docs/demo-prompts.md)
+- [Demo 台本：3 组引导场景（检索边界 / 更正 / 恢复交接）](docs/demo-walkthrough.md)
+- [旧版 Demo 台本：6 个场景、停止条件、真实回答边界](docs/demo-prompts.md)
 - [面试演示：两个 2 分钟真实失败案例](docs/interview-demo.md)
 - [本次 Demo 验收（2026-11-17）](docs/demo-acceptance.md)
 - [产品界面截图（headless Chrome，8902）](docs/images/demo-8902-headless-20261117.png)
