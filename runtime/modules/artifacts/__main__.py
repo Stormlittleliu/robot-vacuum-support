@@ -121,6 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_source.add_argument(
         "--include-assets",
         action="store_true",
+        default=None,
         help="copy only explicitly declared read-only project assets",
     )
     build_source.add_argument("--json", action="store_true")

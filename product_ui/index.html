@@ -120,8 +120,35 @@
     </div>
   </div>
 </main>
+<script src="config.js"></script>
 <script>
 const state = { info:null, sessions:[], current:null, pending:null, busy:false, lastPrompt:"", handoff:null, handoffSummary:null, sessionRequest:0, humanSeen:new Set(), humanCursor:0, polling:false };
+const API_BASE = String((window.RVS_CONFIG && window.RVS_CONFIG.apiBase) || "/api").replace(/\/+$/, "");
+const ACCESS_TOKEN_KEY = "rvs_access_token";
+function apiUrl(path) { return API_BASE + (String(path).startsWith("/") ? path : "/" + path); }
+function accessToken() {
+  try { return sessionStorage.getItem(ACCESS_TOKEN_KEY) || ""; } catch (_) { return ""; }
+}
+function authHeaders(extra) {
+  const headers = Object.assign({}, extra || {});
+  const token = accessToken();
+  if (token) headers.Authorization = "Bearer " + token;
+  return headers;
+}
+async function apiFetch(path, options) {
+  const opts = Object.assign({}, options || {});
+  opts.headers = authHeaders(opts.headers);
+  let response = await fetch(apiUrl(path), opts);
+  if (response.status === 401) {
+    const entered = window.prompt("该部署需要访问 token。请输入管理员提供的访问 token（仅保存在本标签页会话中）：");
+    if (entered && entered.trim()) {
+      try { sessionStorage.setItem(ACCESS_TOKEN_KEY, entered.trim()); } catch (_) {}
+      opts.headers = authHeaders(opts.headers);
+      response = await fetch(apiUrl(path), opts);
+    }
+  }
+  return response;
+}
 const $ = (id) => document.getElementById(id);
 
 function text(node, value) { node.textContent = value == null ? "" : String(value); }
@@ -403,7 +430,7 @@ function downloadHandoff() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch("/api" + path, { headers: {"Content-Type":"application/json"}, ...options });
+  const response = await apiFetch(path, { headers: {"Content-Type":"application/json"}, ...options });
   let payload = null;
   try { payload = await response.json(); } catch (_) {}
   if (!response.ok) {
@@ -539,7 +566,7 @@ async function sendMessage(prompt, action, payload) {
     addMessage("user", prompt);
   }
   const assistant = addMessage("assistant", "");
-  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/${action === "resume" ? "resume" : "messages"}`, {
+  const response = await apiFetch(`/sessions/${encodeURIComponent(sessionId)}/${action === "resume" ? "resume" : "messages"}`, {
     method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
   });
   if (!response.ok) {

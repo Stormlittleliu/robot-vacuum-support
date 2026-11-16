@@ -928,15 +928,24 @@ def build_project(
     project_dir: str | Path,
     out: str | Path,
     *,
-    include_assets: bool = False,
+    include_assets: bool | None = None,
 ) -> dict[str, Any]:
-    """用源工程自身内容构建新的 v2 artifact；绝不覆盖旧产物。"""
+    """用源工程自身内容构建新的 v2 artifact；绝不覆盖旧产物。
+
+    ``include_assets=None`` follows the source project's declaration (legacy
+    behaviour).  Passing ``False`` explicitly lets a container build the
+    runtime without copying mounted knowledge/model/index trees; passing
+    ``True`` keeps the existing ``--include-assets`` CLI path.
+    """
     project_root = Path(project_dir).expanduser()
     if not project_root.is_dir():
         raise ProjectError(f"project directory is not a directory: {project_root}")
     project_root = project_root.resolve()
     project = _load_project(project_root)
-    include_assets = bool(include_assets or project.get("include_assets"))
+    if include_assets is None:
+        include_assets = bool(project.get("include_assets"))
+    else:
+        include_assets = bool(include_assets)
 
     output_root = Path(out).expanduser()
     output_resolved = output_root.resolve()

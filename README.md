@@ -92,7 +92,7 @@ Invoke-RestMethod http://127.0.0.1:8902/api/health
 Invoke-RestMethod http://127.0.0.1:8902/api/instance
 ```
 
-产品地址是 `http://127.0.0.1:8902/`；健康接口 `GET /api/health`，身份接口 `GET /api/instance`。每个会话使用独立的 `data/`、`workspace/chroma_db` 和会话存储；`assets/models` 只读共享。启动时会把知识复制到会话数据目录、把索引复制到会话 workspace，并在私有副本上做 PDF 编号条目 coverage。
+产品地址是 `http://127.0.0.1:8902/`；健康/身份接口是 `GET /api/health`、`GET /api/health/live`、`GET /api/health/ready`、`GET /api/instance`；`/api` 与 `/api/v1` 双路由保持兼容，OpenAPI 在 `/api/docs`。每个会话使用独立的 `data/`、`workspace/chroma_db` 和会话存储；`assets/models` 只读共享。启动时会把知识复制到会话数据目录、把索引复制到会话 workspace，并在私有副本上做 PDF 编号条目 coverage。
 
 > `scripts/manage_product.py` 只管理本机固定的 `outputs/release-v1/instance-8902.json` 和冻结产物，**不是克隆后的通用入口**；干净 clone 没有该配置。GitHub 访客请使用上面的显式 `serve.py --instance-config`。
 
@@ -102,7 +102,18 @@ Invoke-RestMethod http://127.0.0.1:8902/api/instance
 
 工作流：前台点“申请人工处理”→ 后台“待处理”列表 → 接手 → 填写人工回复 → 用户前台轮询看到带“人工客服”标识的回复 → 填写结案备注并“结案并恢复机器人”。工单状态 `waiting / active / closed` 与会话 `active / ended` 独立；结案后用户可重新申请，生成新工单并保留旧工单摘要。打开工单期间，用户新消息只进人工队列、不调用模型；重复申请幂等，人工回复用 `request_id` 防重复，机器人忙时申请返回 409。
 
-后台只读取会话记录和现有只读转人工摘要，不上传知识原文。每个会话的工单持久化在 `handoff.json`，原子写 + 文件锁；管理 API 仅当实例绑定 `127.0.0.1 / ::1 / localhost` 时开放，`0.0.0.0` 等远程绑定直接 403（不信任 `Forwarded`，也不额外做账号系统）。管理写入要求 `application/json` 和同源 `Origin`（本机无 `Origin` 的 API 调用允许），页面文本全部按纯文本渲染。
+后台只读取会话记录和现有只读转人工摘要，不上传知识原文。每个会话的工单持久化在 `handoff.json`，原子写 + 文件锁。认证分两种模式：
+
+- **未配置 `RVS_ADMIN_TOKEN`（兼容本机模式）**：管理 API/页面仅当实例绑定 `127.0.0.1 / ::1 / localhost` 时开放，`0.0.0.0` 等远程绑定直接 403；不信任 `Host`/`Forwarded`。
+- **配置 `RVS_ADMIN_TOKEN`（云/远程模式）**：管理 API 要求 `Authorization: Bearer <token>`，constant-time 比较；后台页面是公开登录壳，管理员在页面输入 token 后仅存 `sessionStorage`，不进 URL/localStorage，所有管理数据请求都带 Bearer。
+
+管理写入始终要求 `application/json` 和允许的 `Origin`（本机无 `Origin` 的 API 调用允许）；跨域只认显式 `RVS_ALLOWED_ORIGINS` 白名单，同源反代可用。普通会话 API 在公开部署设置 `RVS_ACCESS_TOKEN` 后要求用户 Bearer/Cookie；这是**单租户共享门禁**，不是多用户隔离。页面文本全部按纯文本渲染。
+
+## 云部署与前后端分离（Docker）
+
+`Dockerfile`、`docker-compose.yml`、`.dockerignore`、`deploy/nginx.conf`、`docker/entrypoint.py` 和 `.env.docker.example` 提供单租户本地可部署交付：backend 为 Python 3.11 非 root、只在内部网络；nginx 是唯一公开端口并独立 serve `product_ui`；`RVS_SERVE_STATIC=false` 关闭 backend 静态托管。entrypoint 启动时复用现有 `build_project` 在可写 `/data` 构建 artifact，资产（知识/模型/索引）只读挂载，镜像不含它们和密钥/outputs。SSE 经 nginx 关闭 buffer/缓存并使用长超时。
+
+完整步骤、token 生成（文档只放占位值）、资产挂载、CORS、日志/恢复和限制见 [docs/deployment.md](docs/deployment.md)。**注意是单租户**：`RVS_ACCESS_TOKEN` 是共享访问门禁，不提供按访客的会话所有权；公开部署必须设置它，管理 token 必须另设。没有云服务器凭据，因此交付的是本地可部署文件与本地验证结果，不声称线上已部署。
 
 ## Demo 与案例
 
@@ -142,9 +153,13 @@ robot-vacuum-support/
   project.json                  # 工程声明（spec/runtime/frontend/assets）
   robot_vacuum/                 # 场景 spec，v1.json 为权威
   runtime/                      # 独立运行时源码（core + modules + config）
-  product_ui/                   # 产品前端
+  product_ui/                   # 产品原生静态前端（config.js 配置 API 基址）
   scripts/manage_product.py     # 本机固定 8902 实例的启停包装（非通用入口）
   requirements.txt
+  Dockerfile                    # Python 3.11 非 root backend
+  docker-compose.yml            # backend + nginx frontend，单公开端口
+  docker/                       # entrypoint（build_project -> serve）与健康探针
+  deploy/nginx.conf             # 静态前端 + /api 反代 + SSE 禁 buffer
   assets/                       # knowledge/models/rag_index 本地提供，不入库
   docs/                         # 设计、契约、评测口径、Demo 与发布说明
   tests/
@@ -156,6 +171,7 @@ robot-vacuum-support/
 - `runtime/config/rag.yml`：`chat_provider`、`chat_model_name`、`embedding_provider: local`、`embedding_model_name: data/models/bge-small-zh-v1.5`、`retrieval_k`、`retrieval_mode: hybrid`。
 - `runtime/config/chroma.yml`：`collection_name: agent`、`persist_directory: data/runtime/chroma_db`、`data_path: data/knowledge`。
 - 这些 `data/...` 路径由实例的 `AH_DATA_ROOT` / `AH_RUNTIME_ROOT` / `AH_MODEL_ROOT` 投影到会话目录，不依赖原开发机绝对路径。
+- 部署认证：`RVS_ADMIN_TOKEN`（管理 Bearer；未配置时仅 loopback 本机）、`RVS_ACCESS_TOKEN`（公开会话基础门禁；公开部署必须设置）、`RVS_ALLOWED_ORIGINS`（显式 CORS 白名单）、`RVS_SERVE_STATIC`（默认 true，容器示例为 false）。模板见 [.env.docker.example](.env.docker.example)。
 - 换模型或换索引时保持 embedding 维度一致（当前 BGE small zh 为 512 维）；collection 仍为 `agent`。
 
 ## 编辑与重建
@@ -172,12 +188,15 @@ robot-vacuum-support/
 - 引用检查主要是来源存在/被回传，不声称语义正确率或逐 claim 蕴含。
 - PDF 修复只覆盖当前 6 份资料的编号结构；扫描版 PDF/OCR、无编号结构的 PDF 未覆盖。
 - 转人工摘要只在本地整理，不生成外部工单；复制/下载不等于操作系统剪贴板审计。
+- 云部署是单租户：访问 token 是共享门禁，不做多用户账号/会话所有权；持有同一 token 的访客可互看该实例会话。
+- 没有云服务器/域名/证书凭据，未做真实线上部署或生产 SLA 验证；Docker 本地 build 受网络限制时如实记录为阻塞。
 - 12 案结构验收可接受，其中 1 条原始 `retrieval_attempted=false` 保留为 lineage finding，不改写成通过。
 - 本仓库不包含父工作区计划、构建产物、运行会话、人工审核原文和未授权资料；历史文档中的 `outputs/...` 链接表示本地证据位置。
 
 ## 测试
 
 ```powershell
+python -m pytest tests/test_cloud_deployment.py tests/test_handoff_admin.py -q
 python -m pytest tests/test_demo_readiness.py -q
 python -m pytest tests/test_rag_ingestion_coverage.py tests/test_rotating_mainline_acceptance.py -q
 ```

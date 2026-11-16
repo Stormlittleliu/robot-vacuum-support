@@ -14,13 +14,28 @@ import queue
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 try:
+    from .security import (
+        ACCESS_TOKEN_ENV,
+        ADMIN_TOKEN_ENV,
+        access_auth_mode,
+        access_token_from_request,
+        admin_auth_mode,
+        allowed_origins_from_env,
+        bearer_token,
+        configured_token,
+        constant_time_equals,
+        loopback_binding,
+        origin_allowed,
+        static_hosting_enabled,
+    )
     from .store import (
         SessionBindingError,
         SessionEnded,
@@ -45,6 +60,20 @@ try:
         ticket_view,
     )
 except ImportError:  # artifact runtime is flat (server/store/worker on sys.path)
+    from security import (  # type: ignore
+        ACCESS_TOKEN_ENV,
+        ADMIN_TOKEN_ENV,
+        access_auth_mode,
+        access_token_from_request,
+        admin_auth_mode,
+        allowed_origins_from_env,
+        bearer_token,
+        configured_token,
+        constant_time_equals,
+        loopback_binding,
+        origin_allowed,
+        static_hosting_enabled,
+    )
     from store import (  # type: ignore
         SessionBindingError,
         SessionEnded,
@@ -209,39 +238,151 @@ class AdminCloseBody(BaseModel):
     request_id: str | None = None
 
 
+class ApiModel(BaseModel):
+    """Response-model base that keeps forward-compatible extra fields."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    detail: ErrorDetail
+
+
+class HealthInfo(ApiModel):
+    status: str
+    ready: bool
+    required_assets: dict[str, bool] = Field(default_factory=dict)
+    needs_configuration: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+
+
+class InstanceInfo(ApiModel):
+    instance_id: str
+    scenario: str
+    version: int
+    name: str
+    workflows: list[str] = Field(default_factory=list)
+    default_workflow: str | None = None
+    api_version: str = "v1"
+    status: str = "degraded"
+    readiness: HealthInfo | None = None
+
+
+class SessionSummary(ApiModel):
+    session_id: str
+    status: str | None = None
+    workflow: str | None = None
+    updated_at: float | int | str | None = None
+
+
+class SessionListResponse(ApiModel):
+    sessions: list[SessionSummary] = Field(default_factory=list)
+
+
+class SessionDetail(SessionSummary):
+    transcript: list[dict[str, Any]] = Field(default_factory=list)
+    workspace: str | None = None
+    handoff: dict[str, Any] | None = None
+    support: dict[str, Any] | None = None
+
+
+class CreatedSession(SessionSummary):
+    workspace: str | None = None
+
+
+class HandoffStatus(ApiModel):
+    enabled: bool | None = True
+    status: str
+    ticket: dict[str, Any] | None = None
+    can_request: bool | None = None
+
+
+class HandoffRequestResult(ApiModel):
+    ok: bool
+    ticket: dict[str, Any] | None = None
+    created: bool | None = None
+    duplicate: bool | None = None
+
+
+class AdminListResult(ApiModel):
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+    filter: str = "all"
+    admin: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminDetailResult(ApiModel):
+    ticket: dict[str, Any] | None = None
+    session: dict[str, Any] = Field(default_factory=dict)
+    transcript: list[dict[str, Any]] = Field(default_factory=list)
+    handoff: dict[str, Any] | None = None
+    queued_messages: list[dict[str, Any]] = Field(default_factory=list)
+    admin: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminActionResult(ApiModel):
+    ok: bool
+    ticket: dict[str, Any] | None = None
+    changed: bool | None = None
+    duplicate: bool | None = None
+
+
+class SimpleOk(ApiModel):
+    ok: bool
+    status: str | None = None
+    session_id: str | None = None
+
+
+class FileListResult(ApiModel):
+    files: list[dict[str, Any]] = Field(default_factory=list)
+    workspace: str | None = None
+
+
+class UploadResult(ApiModel):
+    path: str
+    workspace: str
+
+
 def _error(status_code: int, code: str, message: str) -> None:
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 
+API_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "请求不合法"},
+    401: {"model": ErrorResponse, "description": "缺少或无效的 Bearer token"},
+    403: {"model": ErrorResponse, "description": "Origin/认证/权限拒绝"},
+    404: {"model": ErrorResponse, "description": "资源不存在"},
+    409: {"model": ErrorResponse, "description": "状态冲突或重复请求"},
+    413: {"model": ErrorResponse, "description": "文件过大"},
+    415: {"model": ErrorResponse, "description": "需要 application/json"},
+    422: {"model": ErrorResponse, "description": "参数校验失败"},
+    500: {"model": ErrorResponse, "description": "服务内部错误"},
+    503: {"model": ErrorResponse, "description": "能力未配置或不可用"},
+}
+
+
 def _loopback_binding(host: str | None) -> bool:
-    value = str(host or "").strip().lower().strip("[]")
-    return value in {"127.0.0.1", "localhost", "::1"}
+    return loopback_binding(host)
 
 
 def _admin_enabled(config) -> bool:
-    """Local single-agent admin is allowed only when the listener is loopback.
+    """Admin surface exists on loopback, or on any bind when a token is set.
 
-    Deliberately uses the configured bind host, not ``Host`` / ``X-Forwarded-*``:
-    a reverse proxy or a forged forwarding header must not turn a remote bind
-    into a local admin surface.  No account system is added; remote binds
-    simply have no management API.
+    The check deliberately uses the configured bind host.  ``Host`` and
+    ``X-Forwarded-*`` never turn a remote bind into loopback mode.
     """
-    return _loopback_binding(getattr(config, "host", None))
+    return bool(configured_token(ADMIN_TOKEN_ENV)) or _loopback_binding(
+        getattr(config, "host", None)
+    )
 
 
 def _same_origin(request: Request) -> bool:
-    origin = request.headers.get("origin")
-    if not origin:
-        # Local tools / curl are allowed; browsers always attach Origin on
-        # cross-site POSTs.  Never trust Forwarded headers here.
-        return True
-    if origin.strip().lower() == "null":
-        return False
-    parsed = urlparse(origin)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return False
-    host = str(request.headers.get("host") or "").strip().lower()
-    return bool(host) and parsed.netloc.strip().lower() == host
+    return origin_allowed(request, allowed_origins_from_env())
 
 
 def _json_write(request: Request) -> bool:
@@ -251,9 +392,33 @@ def _json_write(request: Request) -> bool:
 
 def _require_write(request: Request) -> None:
     if not _same_origin(request):
-        _error(403, "origin_rejected", "写入请求必须同源")
+        _error(403, "origin_rejected", "写入请求 Origin 不在允许列表")
     if not _json_write(request):
         _error(415, "json_required", "写入请求必须使用 application/json")
+
+
+def _admin_has_valid_token(request: Request) -> bool:
+    expected = configured_token(ADMIN_TOKEN_ENV)
+    if not expected:
+        return False
+    return constant_time_equals(
+        bearer_token(request.headers.get("authorization")), expected
+    )
+
+
+def _access_has_valid_token(request: Request) -> bool:
+    expected = configured_token(ACCESS_TOKEN_ENV)
+    if not expected:
+        return True
+    return constant_time_equals(access_token_from_request(request), expected)
+
+
+def _auth_error(status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": {"code": code, "message": message}},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def _map_handoff_exception(exc: Exception) -> None:
@@ -382,21 +547,39 @@ def _health(config) -> dict:
         "needs_configuration" if missing_bindings else "degraded"
     )
     model_root = Path(config.model_root)
+    # Public health is an intentionally safe summary: no filesystem paths, no
+    # credential names/values and no raw config issues (they can carry paths).
     return {
         "status": status,
         "ready": ready,
         "identity": _identity(config),
-        "required_assets": required,
-        "needs_configuration": needs_configuration,
+        "required_assets": {name: bool(value) for name, value in required.items()},
+        "needs_configuration": sorted(set(needs_configuration)),
         "model": {
             "configured": bool(credentials),
-            "credential_names": credentials,
-            "root": str(model_root),
             "root_present": model_root.is_dir(),
         },
-        "missing": missing,
-        "issues": list(getattr(config, "issues", []) or []),
+        "missing": sorted(set(missing)),
+        "deployment": {
+            "single_tenant": True,
+            "admin_auth": admin_auth_mode(),
+            "user_auth": access_auth_mode(),
+            "static_ui": static_hosting_enabled(),
+        },
     }
+
+
+def _liveness(config) -> dict:
+    return {
+        "status": "alive",
+        "ready": False,
+        "instance_id": config.instance_id,
+        "pid": os.getpid(),
+    }
+
+
+def _readiness(config) -> dict:
+    return _health(config)
 
 
 def create_app(config) -> FastAPI:
@@ -411,71 +594,159 @@ def create_app(config) -> FastAPI:
         yield
         manager.close_all()
 
-    app = FastAPI(title=f"{config.name} · instance", version="1.0", lifespan=lifespan)
+    app = FastAPI(
+        title=f"{config.name} · 单租户产品接口",
+        description=(
+            "同一套接口同时注册在 /api 与 /api/v1 下，保留既有兼容路径。"
+            "公开 health/identity 只返回安全摘要；会话与人工管理接口按部署环境"
+            "要求 Bearer token。适用于单租户部署，不提供多用户隔离。"
+        ),
+        version="1.0",
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json",
+        openapi_tags=[
+            {"name": "健康与身份", "description": "公开的安全摘要与存活/就绪检查"},
+            {"name": "会话", "description": "会话创建、消息 SSE、停止/重开/结束"},
+            {"name": "用户转人工", "description": "用户侧申请人工与轮询人工回复"},
+            {"name": "人工后台", "description": "单租户人工坐席管理接口（需管理 token）"},
+            {"name": "文件", "description": "会话工作区文件上传、列表与下载"},
+        ],
+        lifespan=lifespan,
+    )
     app.state.instance_config = config
     app.state.store = store
     app.state.manager = manager
     handoff = HumanHandoffStore(store)
     app.state.handoff = handoff
 
-    @app.middleware("http")
-    async def admin_guard(request: Request, call_next):
-        path = request.url.path
-        is_api = path in {"/api/admin", "/api/v1/admin"} or path.startswith(
+    allowed_origins = allowed_origins_from_env()
+    if allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-RVS-Request-Id",
+                "X-RVS-Turn-Id",
+            ],
+            expose_headers=["X-RVS-Request-Id", "X-RVS-Cold", "X-RVS-Handoff"],
+            max_age=600,
+        )
+
+    def _is_admin_api(path: str) -> bool:
+        return path in {"/api/admin", "/api/v1/admin"} or path.startswith(
             ("/api/admin/", "/api/v1/admin/")
         )
-        is_page = path in {"/admin", "/admin.html"}
-        if not (is_api or is_page):
+
+    @app.middleware("http")
+    async def security_guard(request: Request, call_next):
+        path = request.url.path
+        method = request.method.upper()
+        if method == "OPTIONS":
             return await call_next(request)
-        if not _admin_enabled(config):
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "detail": {
-                        "code": "admin_local_only",
-                        "message": "管理后台仅在本机 loopback 绑定时可用，远程绑定未配置管理认证",
-                    }
-                },
-            )
-        if is_api and request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
-            if not _same_origin(request):
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "detail": {
-                            "code": "origin_rejected",
-                            "message": "管理写入必须同源",
-                        }
-                    },
+
+        is_admin_api = _is_admin_api(path)
+        is_admin_page = path in {"/admin", "/admin.html"}
+        is_public_api = path in {
+            "/api/health",
+            "/api/health/live",
+            "/api/health/ready",
+            "/api/instance",
+            "/api/openapi.json",
+            "/api/docs",
+            "/api/docs/oauth2-redirect",
+            "/api/redoc",
+            "/api/v1/health",
+            "/api/v1/health/live",
+            "/api/v1/health/ready",
+            "/api/v1/instance",
+        }
+        is_api = path.startswith("/api/")
+
+        if is_admin_page:
+            if not _admin_enabled(config):
+                return _auth_error(
+                    403,
+                    "admin_local_only",
+                    "管理后台仅在本机 loopback 绑定时可用；远程部署请配置 RVS_ADMIN_TOKEN",
                 )
-            if not _json_write(request):
-                return JSONResponse(
-                    status_code=415,
-                    content={
-                        "detail": {
-                            "code": "json_required",
-                            "message": "管理写入必须使用 application/json",
-                        }
-                    },
+            return await call_next(request)
+
+        if is_admin_api:
+            if not _admin_enabled(config):
+                return _auth_error(
+                    403,
+                    "admin_local_only",
+                    "管理后台仅在本机 loopback 绑定时可用；远程部署请配置 RVS_ADMIN_TOKEN",
                 )
+            if configured_token(ADMIN_TOKEN_ENV) and not _admin_has_valid_token(request):
+                return _auth_error(
+                    401,
+                    "admin_unauthorized",
+                    "需要有效的人工后台 Bearer token",
+                )
+            if method in {"POST", "PUT", "PATCH", "DELETE"}:
+                if not _same_origin(request):
+                    return _auth_error(403, "origin_rejected", "管理写入 Origin 不在允许列表")
+                if not _json_write(request):
+                    return _auth_error(415, "json_required", "管理写入必须使用 application/json")
+            return await call_next(request)
+
+        if is_api and not is_public_api:
+            if not _access_has_valid_token(request):
+                return _auth_error(
+                    401,
+                    "access_unauthorized",
+                    "需要有效的访问 Bearer token（或同名 Cookie）",
+                )
+            if method in {"POST", "PUT", "PATCH", "DELETE"} and not _same_origin(request):
+                return _auth_error(403, "origin_rejected", "写入请求 Origin 不在允许列表")
         return await call_next(request)
 
-    def dual(path: str, methods: list[str]):
+    def dual(
+        path: str,
+        methods: list[str],
+        *,
+        tags: list[str] | None = None,
+        summary: str | None = None,
+        response_model: type[BaseModel] | None = None,
+        responses: dict[int | str, dict[str, Any]] | None = None,
+        status_code: int = 200,
+    ):
         def decorate(func):
             for prefix in ("/api", "/api/v1"):
-                app.api_route(prefix + path, methods=methods)(func)
+                version = "v1" if prefix == "/api/v1" else "v0"
+                for method in methods:
+                    route_kwargs: dict[str, Any] = {
+                        "methods": [method],
+                        "tags": tags,
+                        "summary": summary,
+                        "status_code": status_code,
+                        "responses": responses or API_ERROR_RESPONSES,
+                        "operation_id": f"{func.__name__}_{version}_{method.lower()}",
+                    }
+                    if response_model is not None:
+                        route_kwargs["response_model"] = response_model
+                    app.api_route(prefix + path, **route_kwargs)(func)
             return func
 
         return decorate
 
     # ------------------------------------------------------------ identity
-    @dual("/instance", ["GET"])
+    @dual(
+        "/instance",
+        ["GET"],
+        tags=["健康与身份"],
+        summary="公开实例身份与就绪摘要",
+        response_model=InstanceInfo,
+        responses={200: {"model": InstanceInfo}},
+    )
     def instance_info():
         health = _health(config)
-        port = int(getattr(config, "port", 0) or 0)
-        frontend_url = (
-            f"http://{config.host}:{port}/" if port else "/"
-        )
         return {
             **_identity(config),
             "instance_id": config.instance_id,
@@ -485,21 +756,76 @@ def create_app(config) -> FastAPI:
             "workflows": list(config.workflows),
             "default_workflow": config.default_workflow,
             "api_version": "v1",
-            "frontend_url": frontend_url,
+            # Frontend is served by the same origin (nginx) in a separated
+            # deployment; never advertise an internal bind address here.
+            "frontend_url": "/",
             "status": health["status"],
+            "auth": {
+                "single_tenant": True,
+                "admin": admin_auth_mode(),
+                "user": access_auth_mode(),
+            },
             "readiness": health,
         }
 
-    @dual("/health", ["GET"])
+    @dual(
+        "/health",
+        ["GET"],
+        tags=["健康与身份"],
+        summary="健康/就绪摘要（公开，安全字段）",
+        response_model=HealthInfo,
+        responses={200: {"model": HealthInfo}},
+    )
     def health():
         return _health(config)
 
+    @dual(
+        "/health/live",
+        ["GET"],
+        tags=["健康与身份"],
+        summary="Liveness：进程存活",
+        response_model=HealthInfo,
+        responses={200: {"model": HealthInfo}},
+    )
+    def health_live():
+        return _liveness(config)
+
+    @dual(
+        "/health/ready",
+        ["GET"],
+        tags=["健康与身份"],
+        summary="Readiness：模型/资产/前端是否就绪",
+        response_model=HealthInfo,
+        responses={
+            200: {"model": HealthInfo, "description": "已就绪"},
+            503: {"model": HealthInfo, "description": "降级或缺少配置，可启动但不可完整问答"},
+        },
+    )
+    def health_ready():
+        payload = _readiness(config)
+        return JSONResponse(
+            status_code=200 if payload.get("ready") else 503,
+            content=payload,
+        )
+
     # ------------------------------------------------------------ sessions
-    @dual("/sessions", ["GET"])
+    @dual(
+        "/sessions",
+        ["GET"],
+        tags=["会话"],
+        summary="列出会话（单租户共享访问）",
+        response_model=SessionListResponse,
+    )
     def list_sessions():
         return {"sessions": store.list()}
 
-    @dual("/sessions", ["POST"])
+    @dual(
+        "/sessions",
+        ["POST"],
+        tags=["会话"],
+        summary="创建会话",
+        response_model=CreatedSession,
+    )
     def create_session(body: CreateSession | None = None):
         workflow = (body.workflow if body else None) or config.default_workflow
         workflows = list(config.workflows)
@@ -508,7 +834,13 @@ def create_app(config) -> FastAPI:
         metadata = store.create(workflow=workflow)
         return {**metadata, "workspace": str(store.workspace_path(metadata["session_id"]))}
 
-    @dual("/sessions/{session_id}", ["GET"])
+    @dual(
+        "/sessions/{session_id}",
+        ["GET"],
+        tags=["会话"],
+        summary="读取会话、转录与售后摘要",
+        response_model=SessionDetail,
+    )
     def get_session(session_id: str):
         try:
             metadata = store.get(session_id)
@@ -527,7 +859,12 @@ def create_app(config) -> FastAPI:
             payload["support"] = support_public_view(state)
         return payload
 
-    @dual("/sessions/{session_id}/support", ["GET"])
+    @dual(
+        "/sessions/{session_id}/support",
+        ["GET"],
+        tags=["会话"],
+        summary="读取会话售后状态（只读投影）",
+    )
     def get_support(session_id: str):
         try:
             store.get(session_id)
@@ -538,7 +875,12 @@ def create_app(config) -> FastAPI:
         state = support_load_state(store.load_support_state(session_id))
         return {"enabled": True, "support": support_public_view(state)}
 
-    @dual("/sessions/{session_id}/handoff-summary", ["GET", "POST"])
+    @dual(
+        "/sessions/{session_id}/handoff-summary",
+        ["GET", "POST"],
+        tags=["用户转人工"],
+        summary="只读转人工摘要（GET/POST 等价，不生成外部工单）",
+    )
     def handoff_summary(session_id: str):
         """Read-only local handoff brief.  It is never sent externally.
 
@@ -576,7 +918,13 @@ def create_app(config) -> FastAPI:
             headers={"Cache-Control": "no-store", "X-RVS-Handoff": "1"},
         )
 
-    @dual("/sessions/{session_id}/handoff", ["GET"])
+    @dual(
+        "/sessions/{session_id}/handoff",
+        ["GET"],
+        tags=["用户转人工"],
+        summary="读取当前人工工单状态",
+        response_model=HandoffStatus,
+    )
     def get_handoff(session_id: str):
         try:
             store.get(session_id)
@@ -587,7 +935,13 @@ def create_app(config) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             _map_handoff_exception(exc)
 
-    @dual("/sessions/{session_id}/handoff/request", ["POST"])
+    @dual(
+        "/sessions/{session_id}/handoff/request",
+        ["POST"],
+        tags=["用户转人工"],
+        summary="申请人工（幂等；机器人忙时 409）",
+        response_model=HandoffRequestResult,
+    )
     def request_handoff(
         session_id: str,
         request: Request,
@@ -633,7 +987,12 @@ def create_app(config) -> FastAPI:
             "duplicate": result["duplicate"],
         }
 
-    @dual("/sessions/{session_id}/handoff/messages", ["GET"])
+    @dual(
+        "/sessions/{session_id}/handoff/messages",
+        ["GET"],
+        tags=["用户转人工"],
+        summary="轮询人工客服回复（after 游标）",
+    )
     def handoff_messages(session_id: str, after: int = 0):
         try:
             store.get(session_id)
@@ -698,7 +1057,13 @@ def create_app(config) -> FastAPI:
             "queued_count": sum(1 for item in queued if not item.get("handled")),
         }
 
-    @dual("/admin/handoff", ["GET"])
+    @dual(
+        "/admin/handoff",
+        ["GET"],
+        tags=["人工后台"],
+        summary="人工工单列表（需 RVS_ADMIN_TOKEN，未配置时仅 loopback）",
+        response_model=AdminListResult,
+    )
     def admin_list_handoff(status: str = "all"):
         if status not in {"all", "waiting", "active", "closed"}:
             _error(422, "invalid_status", "status 只能是 all/waiting/active/closed")
@@ -726,11 +1091,18 @@ def create_app(config) -> FastAPI:
             "admin": {
                 "mode": "local_single_agent",
                 "operator": DEFAULT_OPERATOR,
-                "auth": "loopback_only",
+                "auth": admin_auth_mode(),
+                "single_tenant": True,
             },
         }
 
-    @dual("/admin/handoff/{session_id}", ["GET"])
+    @dual(
+        "/admin/handoff/{session_id}",
+        ["GET"],
+        tags=["人工后台"],
+        summary="人工工单详情与会话转录",
+        response_model=AdminDetailResult,
+    )
     def admin_get_handoff(session_id: str):
         try:
             metadata = store.get(session_id)
@@ -747,11 +1119,18 @@ def create_app(config) -> FastAPI:
             "admin": {
                 "mode": "local_single_agent",
                 "operator": DEFAULT_OPERATOR,
-                "auth": "loopback_only",
+                "auth": admin_auth_mode(),
+                "single_tenant": True,
             },
         }
 
-    @dual("/admin/handoff/{session_id}/accept", ["POST"])
+    @dual(
+        "/admin/handoff/{session_id}/accept",
+        ["POST"],
+        tags=["人工后台"],
+        summary="接手工单",
+        response_model=AdminActionResult,
+    )
     def admin_accept_handoff(session_id: str):
         try:
             store.get(session_id)
@@ -766,7 +1145,13 @@ def create_app(config) -> FastAPI:
             "changed": result["changed"],
         }
 
-    @dual("/admin/handoff/{session_id}/reply", ["POST"])
+    @dual(
+        "/admin/handoff/{session_id}/reply",
+        ["POST"],
+        tags=["人工后台"],
+        summary="人工回复（request_id 幂等）",
+        response_model=AdminActionResult,
+    )
     def admin_reply_handoff(session_id: str, body: AdminReplyBody):
         try:
             store.get(session_id)
@@ -786,7 +1171,13 @@ def create_app(config) -> FastAPI:
             "duplicate": result["duplicate"],
         }
 
-    @dual("/admin/handoff/{session_id}/close", ["POST"])
+    @dual(
+        "/admin/handoff/{session_id}/close",
+        ["POST"],
+        tags=["人工后台"],
+        summary="结案并恢复机器人（request_id 幂等）",
+        response_model=AdminActionResult,
+    )
     def admin_close_handoff(session_id: str, body: AdminCloseBody | None = None):
         try:
             store.get(session_id)
@@ -806,7 +1197,13 @@ def create_app(config) -> FastAPI:
             "duplicate": result["duplicate"],
         }
 
-    @dual("/sessions/{session_id}", ["DELETE"])
+    @dual(
+        "/sessions/{session_id}",
+        ["DELETE"],
+        tags=["会话"],
+        summary="结束会话（保留历史与工单）",
+        response_model=SimpleOk,
+    )
     def end_session(session_id: str):
         try:
             manager.end(session_id)
@@ -814,7 +1211,13 @@ def create_app(config) -> FastAPI:
             _map_exception(exc)
         return {"ok": True, "status": "ended", "session_id": session_id}
 
-    @dual("/sessions/{session_id}/stop", ["POST"])
+    @dual(
+        "/sessions/{session_id}/stop",
+        ["POST"],
+        tags=["会话"],
+        summary="停止当前运行",
+        response_model=SimpleOk,
+    )
     def stop_session(session_id: str):
         try:
             manager.stop(session_id)
@@ -822,7 +1225,13 @@ def create_app(config) -> FastAPI:
             _map_exception(exc)
         return {"ok": True, "status": "active", "session_id": session_id}
 
-    @dual("/sessions/{session_id}/reopen", ["POST"])
+    @dual(
+        "/sessions/{session_id}/reopen",
+        ["POST"],
+        tags=["会话"],
+        summary="重新打开已结束会话",
+        response_model=SimpleOk,
+    )
     def reopen_session(session_id: str):
         try:
             manager.reopen(session_id)
@@ -1259,7 +1668,19 @@ def create_app(config) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             _map_handoff_exception(exc)
 
-    @dual("/sessions/{session_id}/messages", ["POST"])
+    @dual(
+        "/sessions/{session_id}/messages",
+        ["POST"],
+        tags=["会话"],
+        summary="发送消息，返回 SSE 事件流（保持兼容）",
+        responses={
+            200: {
+                "description": "text/event-stream：answer_delta / answer / handoff / interrupt / error / done",
+                "content": {"text/event-stream": {}},
+            },
+            **API_ERROR_RESPONSES,
+        },
+    )
     def post_message(session_id: str, body: MessageRequest, request: Request):
         if latency is None:
             kind, value = _handoff_or_reserve(session_id, body.prompt)
@@ -1291,7 +1712,19 @@ def create_app(config) -> FastAPI:
                 request_span=request_span,
             )
 
-    @dual("/sessions/{session_id}/resume", ["POST"])
+    @dual(
+        "/sessions/{session_id}/resume",
+        ["POST"],
+        tags=["会话"],
+        summary="恢复审批中断，返回 SSE 事件流",
+        responses={
+            200: {
+                "description": "text/event-stream：answer / interrupt / error / done",
+                "content": {"text/event-stream": {}},
+            },
+            **API_ERROR_RESPONSES,
+        },
+    )
     def resume_message(session_id: str, body: ResumeRequest):
         reservation = _reserve(session_id, resume=True)
         return _sse(
@@ -1302,7 +1735,13 @@ def create_app(config) -> FastAPI:
         )
 
     # ------------------------------------------------------------ files
-    @dual("/sessions/{session_id}/files", ["GET"])
+    @dual(
+        "/sessions/{session_id}/files",
+        ["GET"],
+        tags=["文件"],
+        summary="列出会话工作区文件",
+        response_model=FileListResult,
+    )
     def list_files(session_id: str):
         try:
             files = store.workspace_files(session_id)
@@ -1310,7 +1749,13 @@ def create_app(config) -> FastAPI:
             _map_exception(exc)
         return {"files": files, "workspace": str(store.workspace_path(session_id))}
 
-    @dual("/sessions/{session_id}/files", ["POST"])
+    @dual(
+        "/sessions/{session_id}/files",
+        ["POST"],
+        tags=["文件"],
+        summary="上传文件（multipart，最大 10 MB）",
+        response_model=UploadResult,
+    )
     def upload_file(session_id: str, file: UploadFile = File(...)):
         try:
             store.get(session_id)
@@ -1351,34 +1796,38 @@ def create_app(config) -> FastAPI:
         return FileResponse(target, filename=target.name)
 
     # ------------------------------------------------------------ product UI
-    @app.get("/admin")
-    @app.get("/admin.html")
-    def admin_page():
-        root = _ui_root(config)
-        target = root / "admin.html"
-        if not target.is_file():
-            _error(404, "admin_missing", "后台页面缺失")
-        return FileResponse(target, headers={"Cache-Control": "no-store"})
+    # A separated docker deployment sets RVS_SERVE_STATIC=false and nginx
+    # serves product_ui.  The default keeps the historical same-process UI.
+    if static_hosting_enabled():
 
-    @app.get("/")
-    def index():
-        root = _ui_root(config)
-        target = root / "index.html"
-        if not target.is_file():
-            _error(503, "frontend_missing", "实例前端缺失")
-        return FileResponse(target, headers={"Cache-Control": "no-store"})
-
-    @app.get("/{path:path}")
-    def static_file(path: str):
-        root = _ui_root(config).resolve()
-        target = (root / path).resolve()
-        # Only the guarded /admin and /admin.html routes may serve the admin
-        # page; a case/path variant must not bypass the loopback middleware.
-        if target.name.lower() == "admin.html":
-            _error(404, "not_found", "页面不存在")
-        if target.is_file() and target.is_relative_to(root):
+        @app.get("/admin")
+        @app.get("/admin.html", include_in_schema=False)
+        def admin_page():
+            root = _ui_root(config)
+            target = root / "admin.html"
+            if not target.is_file():
+                _error(404, "admin_missing", "后台页面缺失")
             return FileResponse(target, headers={"Cache-Control": "no-store"})
-        return index()
+
+        @app.get("/", include_in_schema=False)
+        def index():
+            root = _ui_root(config)
+            target = root / "index.html"
+            if not target.is_file():
+                _error(503, "frontend_missing", "实例前端缺失")
+            return FileResponse(target, headers={"Cache-Control": "no-store"})
+
+        @app.get("/{path:path}", include_in_schema=False)
+        def static_file(path: str):
+            root = _ui_root(config).resolve()
+            target = (root / path).resolve()
+            # Only /admin and /admin.html may serve the admin page; a path
+            # variant must not bypass the admin guard.
+            if target.name.lower() == "admin.html":
+                _error(404, "not_found", "页面不存在")
+            if target.is_file() and target.is_relative_to(root):
+                return FileResponse(target, headers={"Cache-Control": "no-store"})
+            return index()
 
     return app
 

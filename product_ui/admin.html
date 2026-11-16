@@ -70,6 +70,13 @@
   .notice.ok { color:#b8f0d8; border-color:#2f5e4b; background:#12241d; }
   .queue { margin-top:8px; font-size:12px; color:#ffd48a; }
   .close-note { margin-top:8px; padding:8px 10px; border-left:3px solid #39465a; color:#c8d6e8; font-size:12px; white-space:pre-wrap; background:#111923; }
+  .login-gate { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:rgba(6,9,13,.86); }
+  .login-gate[hidden] { display:none !important; }
+  .login-card { width:min(420px,92vw); background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:10px; }
+  .login-card h2 { margin:0; font-size:17px; }
+  .login-card p { color:var(--muted); font-size:12px; margin:0; }
+  .login-card input { background:#0d141d; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px; font:inherit; }
+  .login-error { color:#ffc1c1; font-size:12px; min-height:18px; }
   @media (max-width:980px) { .layout { grid-template-columns:1fr; height:auto; } aside { border-right:0; border-bottom:1px solid var(--line); max-height:38vh; } .columns { grid-template-columns:1fr; } main.detail { overflow:visible; } }
 </style>
 </head>
@@ -81,8 +88,18 @@
   <span class="grow"></span>
   <span class="pill" id="poll-state">轮询中…</span>
   <a href="/" target="_blank" rel="noopener">用户前台</a>
+  <button id="logout" class="ghost" type="button" hidden>清除 token</button>
   <button id="refresh" class="ghost" type="button">刷新</button>
 </header>
+<div id="login-gate" class="login-gate" hidden>
+  <form class="login-card" id="login-form" autocomplete="off">
+    <h2>人工后台登录</h2>
+    <p>远程部署必须输入管理 token。token 仅保存在本标签页 sessionStorage，不写入 URL、localStorage 或页面文本。</p>
+    <input id="admin-token" type="password" placeholder="RVS_ADMIN_TOKEN" autocomplete="current-password" required>
+    <button class="primary" type="submit">进入后台</button>
+    <div class="login-error" id="login-error"></div>
+  </form>
+</div>
 <div class="layout">
   <aside>
     <div class="filters" id="filters">
@@ -98,7 +115,34 @@
     <div id="detail" class="empty">左侧选择一个人工工单开始处理。</div>
   </main>
 </div>
+<script src="config.js"></script>
 <script>
+const API_BASE = String((window.RVS_CONFIG && window.RVS_CONFIG.apiBase) || "/api").replace(/\/+$/, "");
+const ADMIN_TOKEN_KEY = "rvs_admin_token";
+function apiUrl(path) { return API_BASE + (String(path).startsWith("/") ? path : "/" + path); }
+function adminToken() {
+  try { return sessionStorage.getItem(ADMIN_TOKEN_KEY) || ""; } catch (_) { return ""; }
+}
+function authHeaders(extra) {
+  const headers = Object.assign({}, extra || {});
+  const token = adminToken();
+  if (token) headers.Authorization = "Bearer " + token;
+  return headers;
+}
+function showLogin(message) {
+  const gate = $("login-gate");
+  if (!gate) return;
+  gate.hidden = false;
+  text($("login-error"), message || "");
+  const input = $("admin-token");
+  if (input) { input.value = ""; input.focus(); }
+}
+function hideLogin() {
+  const gate = $("login-gate");
+  if (gate) gate.hidden = true;
+  const input = $("admin-token");
+  if (input) input.value = "";
+}
 const state = {
   filter: "all",
   rows: [],
@@ -144,13 +188,18 @@ function setNotice(message, kind) {
 
 async function api(path, options) {
   const opts = Object.assign({ headers: { "Content-Type":"application/json" } }, options || {});
+  opts.headers = authHeaders(opts.headers);
   if (opts.body && typeof opts.body !== "string") opts.body = JSON.stringify(opts.body);
-  const response = await fetch("/api" + path, opts);
+  const response = await fetch(apiUrl(path), opts);
   let payload = null;
   try { payload = await response.json(); } catch (_) {}
   if (!response.ok) {
     const detail = payload && payload.detail;
     const message = typeof detail === "string" ? detail : (detail && detail.message) || ("HTTP " + response.status);
+    if (response.status === 401) showLogin("token 无效或已过期，请重新输入。");
+    if (response.status === 403 && detail && detail.code === "admin_local_only") {
+      showLogin("该部署未开放 loopback 管理，请配置并使用 RVS_ADMIN_TOKEN。");
+    }
     const error = new Error(message);
     error.status = response.status;
     throw error;
@@ -426,6 +475,34 @@ $("filters").addEventListener("click", (event) => {
   if (button) setFilter(button.dataset.status);
 });
 $("refresh").onclick = () => { loadList(); if (state.current) openTicket(state.current); };
+$("login-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const value = ($("admin-token").value || "").trim();
+  if (!value) { text($("login-error"), "请输入 token。"); return; }
+  try { sessionStorage.setItem(ADMIN_TOKEN_KEY, value); } catch (_) {
+    text($("login-error"), "浏览器禁止 sessionStorage，无法安全保存 token。");
+    return;
+  }
+  try {
+    await api("/admin/handoff?status=all");
+    hideLogin();
+    $("logout").hidden = false;
+    text($("poll-state"), "已登录");
+    await loadList();
+    schedulePoll();
+  } catch (error) {
+    try { sessionStorage.removeItem(ADMIN_TOKEN_KEY); } catch (_) {}
+    showLogin("认证失败：" + error.message);
+  }
+};
+$("logout").onclick = () => {
+  try { sessionStorage.removeItem(ADMIN_TOKEN_KEY); } catch (_) {}
+  state.rows = []; state.current = null; state.detail = null;
+  renderList(); renderDetail();
+  $("logout").hidden = true;
+  setNotice("已清除本标签页 token。", "");
+  showLogin("已退出后台，请重新输入 token。");
+};
 
 function editingDraft() {
   const active = document.activeElement;
@@ -443,13 +520,26 @@ function schedulePoll() {
 }
 
 (async () => {
+  let info = null;
   try {
-    const info = await api("/instance");
+    info = await api("/instance");
     if (info && info.name) document.title = "人工坐席后台 · " + info.name;
-    text($("admin-mode"), "本地模式 · " + (info.host || "loopback"));
   } catch (_) {}
+  const auth = (info && info.auth) || {};
+  const requiresToken = auth.admin === "bearer_token";
+  text($("admin-mode"), requiresToken ? "token 模式 · 单租户" : "本地 loopback 模式");
+  $("logout").hidden = !adminToken();
+  if (requiresToken && !adminToken()) {
+    showLogin("远程/云部署需要管理 token。");
+    return;
+  }
   await loadList();
-  schedulePoll();
+  if (!adminToken()) {
+    // A 401 from loadList opens the gate; otherwise local loopback works.
+    if ($("login-gate").hidden) schedulePoll();
+  } else {
+    schedulePoll();
+  }
 })();
 </script>
 </body>

@@ -83,7 +83,9 @@ python ..\robot-vacuum-support-built\robot_vacuum-v4-<id>\serve.py `
   --instance-config instance.json
 ```
 
-`instance.example.json` 是占位模板；把 `artifact_root`、`storage_root`、`environment_file` 换成你机器上的仓库外绝对路径。产品默认监听 `127.0.0.1:8902`，身份接口 `GET /api/instance`，健康接口 `GET /api/health`。
+`instance.example.json` 是占位模板；把 `artifact_root`、`storage_root`、`environment_file` 换成你机器上的仓库外绝对路径。产品默认监听 `127.0.0.1:8902`，身份接口 `GET /api/instance`，健康接口 `GET /api/health`（另有 `/api/health/live`、`/api/health/ready`）。
+
+Docker/nginx 前后端分离与云部署（单租户、token、资产只读挂载、SSE 与恢复）见 [deployment.md](deployment.md)。该路径不依赖开发机 artifact 或 `outputs/`；容器启动时用同一 `build_project` 在可写 `/data` 重建 runtime。
 
 没有知识原文、模型或索引时，离线结构测试仍可理解源码，但真实 RAG 问答和 live 评测会明确显示 `needs_configuration`，不会 mock 成功。
 
