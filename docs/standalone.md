@@ -111,6 +111,8 @@ python ..\robot-vacuum-support-built\robot_vacuum-v4-<id>\serve.py `
 
 ## 7. 已知限制
 
+- `eval/real_p1_probe.py` 是一次性历史探针，仍硬编码原开发机的 artifact/仓库/env 路径；公开副本保留它用于理解当时的验收方式，不应把它当作可移植入口。可移植的评测入口是 `eval/runner.py`，env 通过 `ROBOT_VACUUM_ENV_FILE` / `--environment-file` 等显式指定。
+- 其他历史文档中的 `C:/Users/...`、`E:/CODE/...` 同样是原开发机路径，不是克隆后的运行说明。
 - 不发布 40–60 集正式评测、holdout 结果、真实用户量、满意率或生产 SLA。
 - 回充状态只覆盖单流程；引用检查主要是来源存在性，不声称语义正确率。
 - 没有本地资产时不能完整运行 live RAG；这是有意的发布边界，不是代码缺陷。
