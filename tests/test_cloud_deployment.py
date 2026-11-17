@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -230,6 +231,7 @@ def test_container_files_are_separated_and_asset_safe():
     volumes = "\n".join(services["backend"]["volumes"])
     assert "/assets/models/bge-small-zh-v1.5:ro" in volumes
     assert "rvs-data:/data" in volumes
+    assert services["backend"]["stop_grace_period"] == "30s"
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "FROM python:3.11" in dockerfile
@@ -299,3 +301,13 @@ def test_container_entrypoint_plan_and_config_use_writable_paths(tmp_path, monke
     assert config["environment_file"] == str(env_file)
     assert "admin-test-token" not in config_path.read_text(encoding="utf-8")
     assert env_file.exists()
+    if os.name != "nt":
+        assert env_file.stat().st_mode & 0o777 == 0o600
+        assert config_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_generated_serve_entry_uses_one_uvicorn_worker():
+    from modules.artifacts.service_entry import SERVICE_ENTRY  # noqa: PLC0415
+
+    assert "workers=1" in SERVICE_ENTRY
+    assert "timeout_graceful_shutdown=10" in SERVICE_ENTRY

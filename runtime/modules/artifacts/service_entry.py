@@ -75,7 +75,16 @@ def main() -> int:
     except ImportError:
         print("uvicorn is required to serve this artifact", file=sys.stderr)
         return 2
-    uvicorn.run(app, host=config.host, port=config.port)
+    # One process owns the session store and its file locks.  Multiple uvicorn
+    # workers would each hold independent in-memory session state, so keep the
+    # worker count explicit and let Docker stop signals reach this process.
+    uvicorn.run(
+        app,
+        host=config.host,
+        port=config.port,
+        workers=1,
+        timeout_graceful_shutdown=10,
+    )
     return 0
 
 

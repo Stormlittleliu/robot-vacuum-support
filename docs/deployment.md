@@ -14,6 +14,7 @@
 | `deploy/nginx.conf` | 独立静态前端、`/api` 反代、SSE 禁 buffer、长超时 |
 | `product_ui/config.js` | 公共 API 地址配置；默认同源 `/api` |
 | `.env.docker.example` | 环境模板，只有占位值；`RVS_ADMIN_TOKEN` / `RVS_ACCESS_TOKEN` 必填 |
+| `scripts/docker_deploy.py` | 必要范围的部署预检、隔离 project 启停与 HTTP/SSE smoke；不打印 token |
 
 镜像内只有源码、spec、前端和依赖。知识原文、BGE 模型、Chroma 索引、`outputs/`、会话和密钥都在镜像外。
 
@@ -62,6 +63,22 @@ RVS_ALLOWED_ORIGINS=
 docker compose --env-file .env.docker up -d --build
 docker compose --env-file .env.docker ps
 ```
+
+推荐先跑一次不接触真实服务的预检（只读环境文件和本地资产，不打印 token 值）：
+
+```powershell
+python scripts/docker_deploy.py preflight --env-file .env.docker
+```
+
+隔离验证其他端口/项目时，显式指定 project 和端口；不要复用现有实例的 project 或卷：
+
+```powershell
+python scripts/docker_deploy.py up --env-file .env.docker --project rvssmoke --public-port 18080
+python scripts/docker_deploy.py smoke --env-file .env.docker --project rvssmoke --base-url http://127.0.0.1:18080
+python scripts/docker_deploy.py down --env-file .env.docker --project rvssmoke
+```
+
+`down` 不传 `-v`，命名卷 `rvssmoke_rvs-data` 会保留；需要彻底清空测试数据时才手工执行 `docker compose -p rvssmoke down -v`。`smoke` 需要本地资产和至少一个占位 provider key 才能让 readiness 通过，但它的流程只创建会话、申请人工并读取 handoff SSE，不调用模型，因此模型成本为零。若要验证真实问答，另行显式配置真实密钥并接受调用成本。
 
 访问：
 
@@ -140,7 +157,8 @@ docker compose --env-file .env.docker up -d
 
 - 定向 pytest：认证/Origin、独立静态、前端 API 配置、OpenAPI/双路由、compose/Dockerfile/nginx/entrypoint 契约、会话/人工回归。
 - `docker compose config`（用 dummy token 仅做语法/插值校验）。
-- 实际 `docker compose build/up` 的结果与限制记录在 `outputs/cloud-deployment-v1/report.json`；失败会如实标为阻塞，不伪称线上成功。
+- 预检脚本、隔离 `rvssmoke` project、18080 端口、随机测试 token 的实际结果记录在 `outputs/deployment-hardening-v1/report.json`；失败会如实标为阻塞，不伪称线上成功。
+- 单 backend 只允许一个 uvicorn worker：会话状态、文件锁和人工工单都在进程内，不能用多 worker 扩容。
 
 已知限制：
 

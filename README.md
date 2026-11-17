@@ -113,7 +113,7 @@ Invoke-RestMethod http://127.0.0.1:8902/api/instance
 
 `Dockerfile`、`docker-compose.yml`、`.dockerignore`、`deploy/nginx.conf`、`docker/entrypoint.py` 和 `.env.docker.example` 提供单租户本地可部署交付：backend 为 Python 3.11 非 root、只在内部网络；nginx 是唯一公开端口并独立 serve `product_ui`；`RVS_SERVE_STATIC=false` 关闭 backend 静态托管。entrypoint 启动时复用现有 `build_project` 在可写 `/data` 构建 artifact，资产（知识/模型/索引）只读挂载，镜像不含它们和密钥/outputs。SSE 经 nginx 关闭 buffer/缓存并使用长超时。
 
-完整步骤、token 生成（文档只放占位值）、资产挂载、CORS、日志/恢复和限制见 [docs/deployment.md](docs/deployment.md)。**注意是单租户**：`RVS_ACCESS_TOKEN` 是共享访问门禁，不提供按访客的会话所有权；公开部署必须设置它，管理 token 必须另设。没有云服务器凭据，因此交付的是本地可部署文件与本地验证结果，不声称线上已部署。
+完整步骤、token 生成（文档只放占位值）、资产挂载、CORS、日志/恢复和限制见 [docs/deployment.md](docs/deployment.md)。部署前可运行 `python scripts/docker_deploy.py preflight --env-file .env.docker`；隔离 smoke 用独立 project/端口/卷，脚本不打印 token。**注意是单租户**：`RVS_ACCESS_TOKEN` 是共享访问门禁，不提供按访客的会话所有权；公开部署必须设置它，管理 token 必须另设。没有云服务器凭据，因此交付的是本地可部署文件与本地验证结果，不声称线上已部署。
 
 ## Demo 与案例
 

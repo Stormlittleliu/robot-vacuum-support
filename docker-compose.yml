@@ -36,6 +36,9 @@ services:
       - "8000"
     networks:
       - rvs-internal
+    # Uvicorn gets SIGTERM through the exec'd entrypoint and has 10s to drain;
+    # give Docker a little more room before SIGKILL so in-flight SSE can close.
+    stop_grace_period: 30s
     restart: unless-stopped
 
   frontend:

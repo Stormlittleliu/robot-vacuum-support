@@ -16,6 +16,14 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN python -m pip install --no-cache-dir -r /app/requirements.txt
 
+# PyTorch/onnxruntime wheels load libgomp at import time; python:slim does not
+# ship it.  Install the small runtime library explicitly instead of relying on
+# a developer machine's toolchain.  Keep this layer after the slow pip layer so
+# a native-library fix does not force a full dependency re-download.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --chown=rvs:rvs runtime /app/runtime
 COPY --chown=rvs:rvs robot_vacuum /app/robot_vacuum
 COPY --chown=rvs:rvs product_ui /app/product_ui

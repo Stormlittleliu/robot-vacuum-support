@@ -1859,7 +1859,15 @@ def main() -> None:
     configure_environment(config)
     import uvicorn
 
-    uvicorn.run(create_app(config), host=config.host, port=config.port)
+    # The session store, manager and handoff file locks are process-local.
+    # Keep exactly one worker so two processes cannot diverge on session state.
+    uvicorn.run(
+        create_app(config),
+        host=config.host,
+        port=config.port,
+        workers=1,
+        timeout_graceful_shutdown=10,
+    )
 
 
 if __name__ == "__main__":
