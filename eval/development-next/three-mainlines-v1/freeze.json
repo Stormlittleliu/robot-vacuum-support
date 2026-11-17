@@ -1,0 +1,21 @@
+{
+  "schema_version": "three-mainlines-freeze/v1",
+  "frozen_at": "2026-11-17T23:15:16+08:00",
+  "suite_sha256": "ecb4555968acf455635575f8398adb7e7ece42ba073ceb1a03fb8a345c4892de",
+  "cases_sha256": "82b9106102ebb5b0f939bc089dfd4d583008aa68ee2f94bea515ad19beb2615e",
+  "case_hashes": {
+    "ml-recharge-normal-closure": "66c25096c78e215380b8c2a577207f1ab2e82add77b994fa518fd998c3cf3869",
+    "ml-recharge-correction-retract": "c0f1c6551ab1afa709446d1d0f6cc3001c75fcede01804709c73ed858edbdb71",
+    "ml-suction-normal-progression": "03ed93235bea43aab99c7f098f42a2cfdb5a26378de494b3f7a915509a03f8ba",
+    "ml-suction-correction-third-party": "156db20b683275885ea989a0e5322213f0e30bf54eb5ecabdd40a871bb402e67",
+    "ml-mopping-normal-progression": "99225b6cd43b7cdd900471c86a67acf50ea92517106c29f47d636219f705208e",
+    "ml-mopping-correction-watermark": "2fc7a5e1c3e5998b40b720bdff6e99becef4401fdc84fdb3c9622f51ac9e6df8",
+    "br-selection-bedroom-noise": "3582633510b0ac83d06333e2f8a32af06fa4c3de299245702592d0ca00f4f651",
+    "br-pdf-3d-structured-light": "653130a6c5a1d50fa4a1d455b1b83d2bcf02df2fc686e3429099aa32945b9bc0",
+    "br-100q2-frequent-pause": "304968e25c1c312f11598d784da846bedadc70fc2bfe1fc0165a7fd8831a1c2e",
+    "br-wetdry-scan-only": "a4c0389d17c1c690bb378a3b120a0ddb846f9a0dbb85aa4eb0f059c588f39fef",
+    "br-maintenance-empty-run": "3595ec60f7b0f072c8e504ccb529c393256e033809a9db241309fc3d10f2223a",
+    "br-troubleshooting-side-brush": "b265c1ec70f91d08cbec7b3a9b60f6febfcf4b1b4eae6012c5bf0a776a602287"
+  },
+  "policy": "expected/evidence frozen before model calls; never edited after run"
+}

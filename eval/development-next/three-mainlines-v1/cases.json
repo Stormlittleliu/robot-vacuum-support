@@ -1,0 +1,927 @@
+{
+  "schema_version": "three-mainlines-cases/v1",
+  "suite_id": "three-mainlines-v1",
+  "revision": "v1",
+  "cases": [
+    {
+      "id": "ml-recharge-normal-closure",
+      "family_id": "ml-recharge",
+      "group": "mainline",
+      "topic": "recharge",
+      "theme": "normal_progression",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "机器人回充时总在充电座前打转，最后停在一旁，充不上电。充电座周围我已经清空了，回充传感器也擦过了。",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_contains": [
+                {
+                  "action_id": "clear_dock_obstacles",
+                  "outcome": "unknown"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "role": "user",
+          "content": "我把充电座重新摆正、确认电源灯亮着，再让它自己回充，它已经自己找到充电座并开始充电了。",
+          "expect": {
+            "state": {
+              "case_status": "resolved",
+              "resolved": true,
+              "closure_level": "explicit_success",
+              "observation_contains": [
+                {
+                  "capability": "automatic_return",
+                  "result": "works"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "第1轮承认自动回充失败且已清障，保持未解决；第2轮接受用户明确报告自动回充已开始充电，结案但原因仍未确认。",
+        "next_actions": [
+          "确认充电座电源和位置",
+          "观察一次自动回充结果"
+        ],
+        "must_not_claim": [
+          "不得在第1轮宣称已解决",
+          "不得把清障当成原因已被证明",
+          "不得把建议当成用户已执行"
+        ],
+        "required_behaviors": [
+          "引用回充/充电座资料",
+          "区分自动回充与手动放回",
+          "在明确成功后才结案"
+        ],
+        "forbidden_behaviors": [
+          "编造用户未做的步骤",
+          "把恢复说成零件故障已确认",
+          "要求用户拆机"
+        ],
+        "state_applicable": true
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 21",
+          "quote": "10. 故障现象：机器人找不到充电座；检测：充电座周围是否有遮挡，回充传感器是否有灰尘，充电座红外信号是否正常；修复：清理充电座周围3米内障碍物，擦拭回充传感器，重新摆放充电座。"
+        },
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "ml-recharge-correction-retract",
+      "family_id": "ml-recharge",
+      "group": "mainline",
+      "topic": "recharge",
+      "theme": "information_correction",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "我已经把它放回充电座了，但还是充不上电。",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_contains": [
+                {
+                  "action_id": "reseat_dock",
+                  "outcome": "failed"
+                }
+              ],
+              "observation_contains": [
+                {
+                  "capability": "manual_charging",
+                  "result": "fails"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "role": "user",
+          "content": "更正一下，刚才说错了：其实我没有把它放回充电座，只是按了回充键，自动回充也还没再试。",
+          "expect": {
+            "state": {
+              "case_status": "active",
+              "resolved": false,
+              "tried_actions_absent": [
+                "reseat_dock"
+              ],
+              "not_tried_actions_contains": [
+                "reseat_dock",
+                "check_auto_return"
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "bounded_answer": "第1轮承认手动放回已试且失败，保持未解决；第2轮接受更正、撤回已试事实，明确两项都还没验证，并给一个最低成本下一步。",
+        "next_actions": [
+          "重新确认自动回充是否被关闭或充电座位置是否改动",
+          "只做一次能区分的观察"
+        ],
+        "must_not_claim": [
+          "不得把更正前的失败继续当成用户已试事实",
+          "不得宣称已解决或原因已确认",
+          "不得把助手建议当成用户已执行"
+        ],
+        "required_behaviors": [
+          "接受更正并撤回已试事实",
+          "区分已试与未试",
+          "给出可区分的下一步"
+        ],
+        "forbidden_behaviors": [
+          "继续引用被撤回的事实",
+          "声称已解决",
+          "虚构用户已执行"
+        ],
+        "state_applicable": true
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 183",
+          "quote": "91. 故障现象：机器人无法自动回充，手动放回后可充电；检测：回充传感器是否故障，充电座信号是否正常；修复：擦拭传感器，调整充电座位置，检测信号。"
+        },
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 23",
+          "quote": "11. 故障现象：充电时指示灯闪烁，无法正常充电；检测：充电触点是否氧化、有灰尘，电源适配器是否故障，电池是否损坏；修复：用干布擦拭充电触点，更换适配电源适配器，电池损坏则更换。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "ml-suction-normal-progression",
+      "family_id": "ml-suction",
+      "group": "mainline",
+      "topic": "suction",
+      "theme": "normal_progression",
+      "primary_document": "assets/knowledge/维护保养.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "最近一周扫完地，地面还是有细灰和毛发，感觉吸力比以前弱。尘盒我已经倒过，滤网也拿出来拍过灰。接下来按什么顺序排查？"
+        },
+        {
+          "role": "user",
+          "content": "按你说的检查了主刷，确实缠了不少头发，剪掉后吸口也通了，但第一次试扫还是觉得边角不干净。还需要查什么？先别让我拆电机。"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "先按低风险顺序排查尘盒、滤网、风道、主刷和吸口；第二轮承认主刷/吸口已处理但边角仍不干净，继续查边刷、风道和传感器，不建议拆电机。",
+        "next_actions": [
+          "检查边刷磨损/安装",
+          "检查风道和灰尘传感器",
+          "必要时联系售后检测电机"
+        ],
+        "must_not_claim": [
+          "不得直接断定电机损坏",
+          "不得把清理主刷说成问题已解决",
+          "不得建议用户自行拆电机"
+        ],
+        "required_behaviors": [
+          "按从低风险到高风险的顺序排查",
+          "引用吸力下降资料",
+          "承认部分步骤已做但效果未恢复"
+        ],
+        "forbidden_behaviors": [
+          "直接判电机故障",
+          "让用户拆电机",
+          "虚构已解决"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 15",
+          "quote": "7. 故障现象：吸力明显下降；检测：尘盒、滤网、风道是否堵塞，主刷是否缠绕杂物，吸口是否被遮挡；修复：逐一清理堵塞部位，剪断主刷缠绕毛发，检查吸口无异物。"
+        },
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 63",
+          "quote": "9. 扫地时若吸力下降，优先检查尘盒、滤网、风道是否堵塞，逐一清理后重试。"
+        },
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 59",
+          "quote": "5. 每周清理机器人风道，用软毛刷从尘盒出风口向吸口方向清扫，保证风道通畅。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "ml-suction-correction-third-party",
+      "family_id": "ml-suction-correction",
+      "group": "mainline",
+      "topic": "suction",
+      "theme": "information_correction_third_party",
+      "primary_document": "assets/knowledge/维护保养.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "我家机器人吸力突然变得很小，是不是电机坏了？我朋友说他的机器也这样，换了电机才好。"
+        },
+        {
+          "role": "user",
+          "content": "更正一下，刚才说朋友换电机是我记混了，他其实是清理了滤网；我这台也只倒过尘盒，滤网和风道都还没检查。先别下结论。"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "拒绝把朋友换电机的经历当成用户机器的证据；第二轮接受更正，撤回第三方事实，按尘盒/滤网/风道/主刷顺序排查，不先下电机故障结论。",
+        "next_actions": [
+          "检查滤网和风道",
+          "检查主刷/吸口",
+          "仍无效再联系售后"
+        ],
+        "must_not_claim": [
+          "不得把朋友换电机当成诊断依据",
+          "不得宣称电机已坏",
+          "不得把第三方经历写成用户已执行"
+        ],
+        "required_behaviors": [
+          "区分第三方经历与当前机器事实",
+          "接受更正",
+          "给低风险排查顺序"
+        ],
+        "forbidden_behaviors": [
+          "依据朋友经历判故障",
+          "建议直接换电机",
+          "虚构用户已检查"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 15",
+          "quote": "7. 故障现象：吸力明显下降；检测：尘盒、滤网、风道是否堵塞，主刷是否缠绕杂物，吸口是否被遮挡；修复：逐一清理堵塞部位，剪断主刷缠绕毛发，检查吸口无异物。"
+        },
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 63",
+          "quote": "9. 扫地时若吸力下降，优先检查尘盒、滤网、风道是否堵塞，逐一清理后重试。"
+        },
+        {
+          "file": "assets/knowledge/扫地机器人100问2.txt",
+          "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+          "locator": "line 26",
+          "quote": "- 检查主刷、边刷是否磨损或缠绕毛发，清理尘盒和滤网，将吸力调至最高档，增大清扫频次。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "ml-mopping-normal-progression",
+      "family_id": "ml-mopping",
+      "group": "mainline",
+      "topic": "mopping",
+      "theme": "normal_progression",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "拖地时不出水，水箱里明明有水，APP 出水量也调到中档了。拖布是湿的但地面几乎是干的，先检查哪里？"
+        },
+        {
+          "role": "user",
+          "content": "我按说的用牙签疏通了出水管，也重新装了水箱，第一次试还是不出水；水箱盖也拧紧了。下一步怎么办？别让我直接拆机身。"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "先查水箱水量、出水量档位、出水管堵塞和安装密封；第二轮承认疏通/重装后仍不出水，转向密封圈、出水口和售后检测，不建议直接拆机身。",
+        "next_actions": [
+          "检查水箱密封圈和出水口",
+          "确认安装到位",
+          "仍不出水联系售后"
+        ],
+        "must_not_claim": [
+          "不得直接断定水泵损坏",
+          "不得建议用户拆机身",
+          "不得把疏通说成已修复"
+        ],
+        "required_behaviors": [
+          "先做低风险水路排查",
+          "引用拖地不出水资料",
+          "承认已试步骤仍未恢复"
+        ],
+        "forbidden_behaviors": [
+          "直接拆机",
+          "断定水泵故障",
+          "虚构已修复"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 33",
+          "quote": "16. 故障现象：拖地不出水；检测：水箱是否有水，出水量是否调至最低，出水管是否堵塞；修复：加注清水，调高出水量，用牙签轻轻疏通出水管。"
+        },
+        {
+          "file": "assets/knowledge/扫拖一体机器人100问.txt",
+          "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+          "locator": "line 26",
+          "quote": "- 检查水箱盖是否拧紧、水箱密封圈是否脱落或破损，确认出水管无堵塞，加水至刻度线内，避免过满溢出。"
+        },
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 38",
+          "quote": "36. 机器人使用时，避免地面有大量积水，防止水渍进入机身内部短路。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "ml-mopping-correction-watermark",
+      "family_id": "ml-mopping",
+      "group": "mainline",
+      "topic": "mopping",
+      "theme": "information_correction",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "拖地后地板上一摊水，是不是水箱漏了？我朋友说密封圈老化就会这样，他直接换了水箱。"
+        },
+        {
+          "role": "user",
+          "content": "更正一下：我刚才说一摊水夸张了，其实是拖完有一片水痕，没有看到漏水；我也没检查过密封圈。朋友换水箱的事跟我这台无关。该怎么判断是出水量还是漏水？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "不把朋友换水箱当成用户漏水证据；第二轮接受更正，撤回漏水判断，区分水痕与漏水，先查出水量、拖布和密封圈，不下漏水结论。",
+        "next_actions": [
+          "调小出水量观察水痕",
+          "检查拖布是否过湿/脏污",
+          "检查水箱盖和密封圈有无渗漏"
+        ],
+        "must_not_claim": [
+          "不得把朋友换水箱当成诊断依据",
+          "不得宣称水箱已漏",
+          "不得把水痕直接等同于漏水"
+        ],
+        "required_behaviors": [
+          "区分水痕与漏水",
+          "接受更正",
+          "给低风险观察步骤"
+        ],
+        "forbidden_behaviors": [
+          "依据第三方经历判断漏水",
+          "建议直接换水箱",
+          "虚构用户已检查"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 31",
+          "quote": "15. 故障现象：拖地时水箱漏水；检测：水箱盖是否拧紧，密封圈是否老化、脱落，出水管是否堵塞；修复：拧紧水箱盖，更换老化密封圈，疏通出水管。"
+        },
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 61",
+          "quote": "30. 故障现象：拖地后地面有明显水痕；检测：出水量是否过大，拖布是否脏污、硬化，清扫速度是否过快；修复：调小出水量，更换拖布，降低清扫速度。"
+        },
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 38",
+          "quote": "36. 机器人使用时，避免地面有大量积水，防止水渍进入机身内部短路。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "br-selection-bedroom-noise",
+      "family_id": "br-selection",
+      "group": "breadth",
+      "topic": "selection",
+      "theme": "selection_noise",
+      "primary_document": "assets/knowledge/选购指南.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "卧室用，扫地机器人的工作噪音选多少比较合适？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "给出工作噪音≤55dB的卧室建议，说明地毯模式噪音会升高，优先降噪电机机型。",
+        "next_actions": [
+          "按卧室场景选择低噪音档位",
+          "查看地毯模式噪音参数"
+        ],
+        "must_not_claim": [
+          "不得编造具体型号价格",
+          "不得声称所有机型都≤55dB"
+        ],
+        "required_behaviors": [
+          "引用选购指南噪音条目",
+          "给出可执行的选购阈值"
+        ],
+        "forbidden_behaviors": [
+          "编造型号",
+          "承诺绝对静音"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/选购指南.txt",
+          "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+          "locator": "line 37",
+          "quote": "18. 噪音控制：工作噪音≤55dB更适合卧室使用，地毯模式噪音会升高，优先选降噪电机机型。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "br-pdf-3d-structured-light",
+      "family_id": "br-pdf-3d",
+      "group": "breadth",
+      "topic": "principle",
+      "theme": "principle_obstacle_avoidance",
+      "primary_document": "assets/knowledge/扫地机器人100问.pdf",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "3D结构光避障是怎么测距和避障的？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "说明通过红外点阵投影测量物体距离和形状，实现精准避障。",
+        "next_actions": [
+          "结合机型说明确认是否支持3D结构光"
+        ],
+        "must_not_claim": [
+          "不得把3D结构光与LDS激光导航混为一谈",
+          "不得编造未给出的精度数字"
+        ],
+        "required_behaviors": [
+          "引用PDF原理条目",
+          "解释点阵投影测距"
+        ],
+        "forbidden_behaviors": [
+          "把它说成激光雷达",
+          "编造精度"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/扫地机器人100问.pdf",
+          "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+          "locator": "pdftotext -layout line 174, PDF page 4, question 50",
+          "quote": "通过红外点阵投影测量物体距离和形状，实现精准避障。",
+          "extraction": "pdftotext -enc UTF-8 -layout; pypdf view encoding-degraded in this image"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "br-100q2-frequent-pause",
+      "family_id": "br-100q2",
+      "group": "breadth",
+      "topic": "usage",
+      "theme": "usage_frequent_pause",
+      "primary_document": "assets/knowledge/扫地机器人100问2.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "机器人清扫时老是频繁暂停，可能是什么原因，先检查什么？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "先查尘盒/滤网是否堵塞、电量是否不足、机身传感器是否被灰尘遮挡，清洁后重试。",
+        "next_actions": [
+          "清理尘盒滤网",
+          "确认电量",
+          "擦拭机身传感器后重试"
+        ],
+        "must_not_claim": [
+          "不得直接断定主板故障",
+          "不得建议拆机"
+        ],
+        "required_behaviors": [
+          "给出低风险检查顺序",
+          "引用100问2资料"
+        ],
+        "forbidden_behaviors": [
+          "直接判主板故障",
+          "建议拆机"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/扫地机器人100问2.txt",
+          "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+          "locator": "line 14",
+          "quote": "- 检查尘盒、滤网是否堵塞，电量是否不足，机身传感器是否被灰尘遮挡，清洁后重试。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "br-wetdry-scan-only",
+      "family_id": "br-wetdry",
+      "group": "breadth",
+      "topic": "usage",
+      "theme": "usage_scan_only",
+      "primary_document": "assets/knowledge/扫拖一体机器人100问.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "扫拖一体机器人可以只扫地不拖地吗？具体怎么设置？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "说明可以在APP清扫模式关闭拖地功能，仅保留吸尘模式单独扫地。",
+        "next_actions": [
+          "在APP进入清扫模式",
+          "关闭拖地功能"
+        ],
+        "must_not_claim": [
+          "不得声称必须拆下水箱才能只扫地",
+          "不得编造不存在的菜单"
+        ],
+        "required_behaviors": [
+          "引用扫拖一体资料",
+          "给出APP设置路径"
+        ],
+        "forbidden_behaviors": [
+          "要求拆机",
+          "编造菜单"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/扫拖一体机器人100问.txt",
+          "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+          "locator": "line 4",
+          "quote": "- 可以，在配套APP中进入【清扫模式】，关闭“拖地功能”，仅保留吸尘模式即可单独扫地。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "br-maintenance-empty-run",
+      "family_id": "br-maintenance",
+      "group": "breadth",
+      "topic": "maintenance",
+      "theme": "maintenance_empty_run",
+      "primary_document": "assets/knowledge/维护保养.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "想定期检查电机和轮组有没有隐患，空转测试应该怎么做？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "说明每月无负载开机运行1分钟，检查有无异响、卡顿。",
+        "next_actions": [
+          "每月空转1分钟",
+          "记录异响/卡顿并联系售后"
+        ],
+        "must_not_claim": [
+          "不得声称空转可修复故障",
+          "不得建议长时间空转"
+        ],
+        "required_behaviors": [
+          "引用维护保养条目",
+          "给出频率和观察项"
+        ],
+        "forbidden_behaviors": [
+          "把空转当维修",
+          "建议拆机"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/维护保养.txt",
+          "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+          "locator": "line 45",
+          "quote": "43. 每月对机器人进行一次“空转测试”，无负载开机运行1分钟，检查有无异响、卡顿。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    },
+    {
+      "id": "br-troubleshooting-side-brush",
+      "family_id": "br-troubleshooting",
+      "group": "breadth",
+      "topic": "troubleshooting",
+      "theme": "troubleshooting_side_brush",
+      "primary_document": "assets/knowledge/故障排除.txt",
+      "source": {
+        "kind": "authored_for_three_mainlines_v1",
+        "generation": "human-authored prompt/expected with line-level knowledge evidence",
+        "no_reuse_of_holdout": true
+      },
+      "origin": {
+        "kind": "authored_development_case",
+        "case_provenance": "authoring+evidence"
+      },
+      "generation": {
+        "method": "fixed_12_sessions_6_mainline_6_breadth",
+        "created_by": "agent"
+      },
+      "scoring_method": {
+        "program": "structural/evidence binding; recharge state subset only",
+        "semantic": "main-model advisory inspection only; no authoritative judge"
+      },
+      "turns": [
+        {
+          "role": "user",
+          "content": "边刷突然不转了，先检查什么？"
+        }
+      ],
+      "expected": {
+        "bounded_answer": "先查边刷是否安装到位、转轴是否缠绕毛发、边刷电机是否异常；重新安装、清理杂物，电机损坏则联系售后。",
+        "next_actions": [
+          "重新安装边刷",
+          "清理转轴杂物",
+          "仍不转联系售后"
+        ],
+        "must_not_claim": [
+          "不得直接断定电机烧毁",
+          "不得建议用户自行更换电机"
+        ],
+        "required_behaviors": [
+          "按安装/缠绕/电机顺序排查",
+          "引用故障排除资料"
+        ],
+        "forbidden_behaviors": [
+          "直接判电机烧毁",
+          "建议自行换电机"
+        ],
+        "state_applicable": false
+      },
+      "evidence": [
+        {
+          "file": "assets/knowledge/故障排除.txt",
+          "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+          "locator": "line 19",
+          "quote": "9. 故障现象：边刷不旋转；检测：边刷是否安装到位，转轴是否缠绕毛发，边刷电机是否异常；修复：重新安装边刷，清理转轴杂物，电机异响则更换边刷电机。"
+        }
+      ],
+      "review": {
+        "status": "not_human_reviewed",
+        "note": "development advisory; semantic rubric is not an authoritative judge pass"
+      }
+    }
+  ]
+}

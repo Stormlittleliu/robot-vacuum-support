@@ -1,0 +1,114 @@
+{
+  "schema_version": "three-mainlines-suite/v1",
+  "suite_id": "three-mainlines-v1",
+  "revision": "v1",
+  "created_at": "2026-11-17",
+  "cases_file": "cases.json",
+  "purpose": "固定 12 独立 session：3 个真实主线各 2 case（回充、吸力/清扫效果、拖地出水），6 条广度各覆盖一份现有知识资料；比例按 session 计，不按 turn。",
+  "counts": {
+    "total": 12,
+    "mainline": 6,
+    "breadth": 6,
+    "user_turns": 18,
+    "mainline_topics": {
+      "recharge": 2,
+      "suction": 2,
+      "mopping": 2
+    }
+  },
+  "proportion": {
+    "mainline": 0.5,
+    "breadth": 0.5,
+    "rule": "6/12 sessions 为主线，6/12 sessions 为广度；主线每 case 2 turn，广度每 case 1 turn，共 18 用户 turn。"
+  },
+  "required_topics": [
+    "recharge",
+    "suction",
+    "mopping"
+  ],
+  "required_breadth_documents": [
+    "assets/knowledge/故障排除.txt",
+    "assets/knowledge/扫地机器人100问.pdf",
+    "assets/knowledge/扫地机器人100问2.txt",
+    "assets/knowledge/扫拖一体机器人100问.txt",
+    "assets/knowledge/维护保养.txt",
+    "assets/knowledge/选购指南.txt"
+  ],
+  "documents": [
+    {
+      "path": "assets/knowledge/故障排除.txt",
+      "sha256": "a544e28e1b42ef4d5aca379e291298bc14dceb3dc71569824d4bb701eda7d68f",
+      "bytes": 42539,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/扫地机器人100问.pdf",
+      "sha256": "f9ee0fea506436d8ea4a5ac6e1c272191023f41e95b677842e527f57745b4eb8",
+      "bytes": 192676,
+      "kind": "knowledge",
+      "extraction": "pdftotext -enc UTF-8 -layout"
+    },
+    {
+      "path": "assets/knowledge/扫地机器人100问2.txt",
+      "sha256": "bf4f52b30736c1432a2577009be7cef82b155bd3605cb9cd9c4fb14373514bfd",
+      "bytes": 18519,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/扫拖一体机器人100问.txt",
+      "sha256": "6500ad32130a8068df6d04b6427c5ea7ffcea54ba38fbb8274be770f7965f54a",
+      "bytes": 21343,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/维护保养.txt",
+      "sha256": "8aa7db7fd4050b1faa8b18f328ad550176f63c495d50563565818b3b6e43f4e7",
+      "bytes": 24532,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    },
+    {
+      "path": "assets/knowledge/选购指南.txt",
+      "sha256": "08d3958c9fc24235905cf53a594bbe9041331761f2e93a309fbea4b7d190f9db",
+      "bytes": 22765,
+      "kind": "knowledge",
+      "extraction": "utf-8 text"
+    }
+  ],
+  "target": {
+    "image": "rvs-backend:smoke",
+    "image_id": "sha256:cd562e9c43461640e1257e73e7b621bb0a6e5801707c063c66e13398328eadf3",
+    "compose_project": "rvs-eval-three",
+    "public_port": 18081,
+    "data_volume": "rvs-eval-three_rvs-data",
+    "artifact_id_at_freeze": "robot_vacuum-v4-7d264b320c",
+    "entry": "HTTP/SSE through nginx at http://127.0.0.1:18081",
+    "existing_service_untouched": "http://127.0.0.1:18080 (rvssmoke)"
+  },
+  "execution": {
+    "mode": "live_once",
+    "host": "127.0.0.1",
+    "concurrency": 2,
+    "max_sessions": 12,
+    "max_turns_per_session": 2,
+    "turn_timeout_seconds": 180,
+    "independent_session_per_case": true,
+    "no_green_retry": true,
+    "transport_retry_policy": "at most one retry for a transport error only; every attempt recorded"
+  },
+  "scoring": {
+    "program": "structural/evidence binding only: answer nonempty, retrieval attempted, citation filename, expected source presence, recharge state subset",
+    "semantic": "main-model advisory inspection only; no authoritative judge",
+    "authoritative_pass_claimed": false,
+    "not_success_rate": true,
+    "not_holdout": true
+  },
+  "state_policy": "Only recharge cases carry dedicated business state expectations; suction/mopping are transcript-only and must not require fabricated state.",
+  "human_pressure_test": {
+    "status": "not_run",
+    "note": "optional, not blocking this development run"
+  }
+}

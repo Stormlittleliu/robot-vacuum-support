@@ -28,6 +28,8 @@ v1 是后续唯一权威。
 
 `eval/development-next/rotating-mainline-v1/` 是 12 session 的紧凑轮换验收集：6 条回充主线（复用已有 grounded development 场景）+ 6 条广度题（每份知识文档一条）。比例、文档覆盖、去重、引用 hash/quote 和 manual-only oracle 由程序在模型调用前验证；live 只读复用 `robot_vacuum-v4-6aa0ba49c6`，隔离端口 8949、并发 2、一次运行。程序只做结构与证据绑定评分，回答语义是 agent inspection advisory，不是 Judge 通过或成功率。入口：`python scripts/run_rotating_mainline.py --validate-only` / `--run`；说明见 [docs/rotating-mainline-acceptance.md](../docs/rotating-mainline-acceptance.md)。
 
+`eval/development-next/three-mainlines-v1/` 是 2026-11-17 的三主线固定集：3 个真实问题 × 2 case（回充、吸力/清扫效果、拖地出水）+ 6 条广度，每份知识资料一条，共 12 session / 18 用户 turn。入口 `python scripts/run_three_mainlines.py --validate-only` / `--run`；当轮 live 在隔离 compose `rvs-eval-three` / 端口 18081 执行，provider 401 使语义验收阻塞，实际发现与复现见 [docs/three-mainlines-test.md](../docs/three-mainlines-test.md)。
+
 ## 与旧 16 条 fixture 的关系
 
 - `eval/cases/v0/recharge-start.json` 与 `tests/recharge_cases.py` 是 P1-03 起步期的
