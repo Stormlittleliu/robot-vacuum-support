@@ -135,7 +135,76 @@ git diff --check
 - `docs/deployment.md`：新增“运行前提：headless，只连接已运行的 Engine”，明确不启动/不唤起 Docker Desktop、不启动 daemon、不停止用户已有进程。
 - 本节：记录本轮实际结果与该约束。
 
-### 9.4 仍然未验证
+### 9.4 当时未验证（已由第 10 节取代）
 
 - `docker build -t rvs-backend:smoke .` 未重跑，镜像仍未经确认。
 - `up` / `smoke`、18080 上的 HTTP/SSE、401、admin 代理、重启持久化均未执行，不得标为通过。
+
+> 第 9 节保留 20:46 的中间状态；随后同一工作树完成了真实构建和容器闭环，结果见第 10 节。9.4 的阻塞结论不再代表当前状态。
+
+## 10. 真实容器闭环（2026-11-17 20:42–20:59）
+
+### 10.1 构建结果
+
+命令：
+
+```powershell
+docker build --progress=plain -t rvs-backend:smoke .
+```
+
+- 构建参数：`PIP_RETRIES=2`、`PIP_TIMEOUT=30`；CPU torch 层使用一次 `--no-cache-dir` 新下载，绕开此前哈希校验失败的缓存条目；`requirements.txt` 层仍挂载 BuildKit pip cache。没有执行 `docker builder prune` 或清理全局 Docker 缓存。
+- 官方 CPU 轮子：`torch==2.15.0+cpu`，来自 `https://download.pytorch.org/whl/cpu`（实际重定向到 `download-r2.pytorch.org`），209.5 MB；索引哈希校验通过，未再现上一轮的哈希不匹配。未关闭哈希/TLS 校验，未使用 `--trusted-host`，未更换镜像源或全局代理。
+- 兼容性核对：`sentence-transformers==6.2.0` 的要求为 `torch>=2.2`，`2.15.0+cpu` 满足，因此本轮不需要回退到更早的 torch，也没有改动版本锁定。
+- 结果：`rvs-backend:smoke` 构建成功，exit 0；镜像 ID `b017bc8ee629`，大小 625,626,835 bytes（约 597 MiB）。构建日志在本地 gitignored 的 `outputs/deployment-hardening-v1/build-final2.log`。
+- 耗时：20:42:01–20:58:58，约 17 分钟。torch 层 84s，常规依赖层 851s，`libgomp1` 层 20s，导出 29s。主要耗时是 PyPI 约 0.2–0.5 MB/s 的下载；`PIP_RETRIES=2` 避免了 10 次 × 60 秒的重试长等。构建+测试超过了 900 秒预算，但没有反复网络探测或手工分块下载。
+
+### 10.2 预检与启动
+
+```powershell
+py -3.11 scripts/docker_deploy.py preflight --env-file .env.docker --project rvssmoke --public-port 18080
+py -3.11 scripts/docker_deploy.py up --env-file .env.docker --project rvssmoke --public-port 18080 --skip-preflight
+```
+
+预检 `ok=true`，以下全为 true：token 存在/互异/非占位、env 文件私有、gitignore/dockerignore、knowledge/models/rag_index、18080 空闲、Docker daemon、compose config。`up` 在 20:58:56 返回 exit 0，使用隔离 project `rvssmoke` 和 18080，未占用其它端口。
+
+### 10.3 API / 认证 / 人工 SSE / nginx
+
+`smoke` 在 20:59:11 返回 exit 0，15 项检查全为 true：
+
+- nginx `frontend_healthz`、backend `/api/health/live`、`/api/health/ready`。
+- `/api/sessions` 无 token 为 401，用户 token 为 200；创建会话成功并返回 session id。
+- 人工工单 request 返回 200；等待工单下的消息走 handoff SSE：`text/event-stream`，包含 `handoff` 与 `done` 事件，未调用模型。
+- admin token 经 nginx 访问 `/api/admin/handoff` 为 200；用户 token 访问同一接口为 401；`/admin.html` 为 200。
+- `logs_no_token=true`、`logs_no_provider_value=true`：运行日志未出现 token 或 provider key 值；本文和报告也没有打印密钥。
+
+### 10.4 重启后数据
+
+```powershell
+py -3.11 outputs/deployment-hardening-v1/persistence_smoke.py create
+docker compose --project-name rvssmoke --env-file .env.docker restart backend
+# 等待 /api/health/ready 返回 200
+py -3.11 outputs/deployment-hardening-v1/persistence_smoke.py verify
+```
+
+- 重启前创建会话 `s-0ab36826df4d46b5`，`workflow=agent`，`handoff.status=waiting`，`created_at=1794920361.901166`。
+- 仅重启 backend，等待 ready 200 后读取同一会话。
+- 重启后 `session_id`、`workflow`、`handoff.status`、`created_at` 与重启前一致，`same_as_before_restart=true`。
+- 会话详情的 `handoff.ticket_id` 重启前后均为 null（该响应未暴露 ticket id），因此本节只声明会话与 handoff 状态持久化，不额外声称 ticket 标识一致；同一构建的 smoke 已独立验证等待工单的 SSE 路径。
+
+### 10.5 停止、卷与测试
+
+```powershell
+py -3.11 scripts/docker_deploy.py down --env-file .env.docker --project rvssmoke
+py -3.11 -m pytest tests/test_cloud_deployment.py tests/test_docker_deploy.py -q
+```
+
+- `down` exit 0，没有传 `-v`；项目容器已停止并移除，命名卷 `rvssmoke_rvs-data` 保留。
+- 定向测试：`13 passed, 1 warning`（httpx per-request cookies 弃用提示，不影响断言）。
+- 全程 0 次模型调用；没有新增功能、没有改全局 proxy/镜像源、没有 push。
+
+### 10.6 仍未验证
+
+- 没有执行 `down` 后再 `up` 并读取旧会话的卷往返测试；只验证了容器 restart 后的持久化，以及 `down` 后卷仍存在。
+- 没有推镜像、没有公网域名/TLS/云主机、没有多用户或并发负载验证。
+- 没有做浏览器端交互测试；只验证了 nginx 提供的 `healthz`、`admin.html` 和 API 代理。
+- 首次构建仍依赖 PyPI/PyTorch 网络；后续重建应命中本地层缓存和 pip cache（torch 层因 `--no-cache-dir` 需要重新下载，除非层缓存命中）。
