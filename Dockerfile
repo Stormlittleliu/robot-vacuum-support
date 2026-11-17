@@ -5,16 +5,29 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_RETRIES=10 \
+    PIP_TIMEOUT=60
 
 RUN groupadd --gid 10001 rvs \
     && useradd --uid 10001 --gid rvs --create-home --shell /usr/sbin/nologin rvs
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN python -m pip install --no-cache-dir -r /app/requirements.txt
+# Docker-only requirements: sentence-transformers pulls PyPI ``torch`` for
+# Linux, whose default wheel depends on the multi-GB CUDA 13 toolkit.  The
+# container only runs CPU embedding inference, so install the official CPU
+# wheel in its own cached layer; local development keeps requirements.txt
+# unchanged.  The BuildKit pip cache keeps already-downloaded wheels when a
+# later package fetch has to be retried.
+COPY requirements.txt requirements-docker.txt /app/
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install \
+      --index-url https://download.pytorch.org/whl/cpu \
+      --extra-index-url https://pypi.org/simple \
+      -r /app/requirements-docker.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -r /app/requirements.txt
 
 # PyTorch/onnxruntime wheels load libgomp at import time; python:slim does not
 # ship it.  Install the small runtime library explicitly instead of relying on

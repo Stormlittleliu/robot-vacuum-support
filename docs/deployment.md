@@ -7,6 +7,7 @@
 | 文件 | 作用 |
 |---|---|
 | `Dockerfile` | Python 3.11 单 backend 镜像，非 root（uid/gid 10001），Linux 启动 |
+| `requirements.txt` / `requirements-docker.txt` | 本机开发依赖保持原样；容器只额外用 CPU-only PyTorch wheel 覆盖 `torch`，避免把多 GB 的 CUDA 13 运行时装进镜像 |
 | `.dockerignore` | 排除知识/模型/索引、密钥、outputs、会话、缓存、测试与本地数据 |
 | `docker/entrypoint.py` | 启动时用现有 `build_project` 在 `/data` 构建 artifact，写实例配置后 `exec` `serve.py` |
 | `docker/healthcheck.py` | 独立 liveness / readiness 探针 |
@@ -157,7 +158,7 @@ docker compose --env-file .env.docker up -d
 
 - 定向 pytest：认证/Origin、独立静态、前端 API 配置、OpenAPI/双路由、compose/Dockerfile/nginx/entrypoint 契约、会话/人工回归。
 - `docker compose config`（用 dummy token 仅做语法/插值校验）。
-- 预检脚本、隔离 `rvssmoke` project、18080 端口、随机测试 token 的实际结果记录在 `outputs/deployment-hardening-v1/report.json`；失败会如实标为阻塞，不伪称线上成功。
+- 预检脚本、隔离 `rvssmoke` project、18080 端口、随机测试 token 的实际结果记录在 [deployment-validation.md](deployment-validation.md)；失败会如实标为阻塞，不伪称线上成功。原始本地 JSON 报告在 `outputs/`，不随仓库发布。
 - 单 backend 只允许一个 uvicorn worker：会话状态、文件锁和人工工单都在进程内，不能用多 worker 扩容。
 
 已知限制：
@@ -165,6 +166,6 @@ docker compose --env-file .env.docker up -d
 - 单租户，不支持多用户账号/租户隔离；访问 token 是共享门禁，不能阻止同一 token 持有者互看会话。
 - Compose 不终止 TLS；公网请在云负载均衡/反向代理终止 HTTPS，并限制管理入口来源。
 - 没有云服务器、域名、证书或真实线上流量验证；本地 compose 通过不等于生产 SLA。
-- 首次构建/启动需要网络安装依赖；依赖或模型下载失败时应查看构建日志，不无限重试。
+- 首次构建/启动需要网络安装依赖；已把容器内的 `torch` 固定为 CPU-only wheel，避免 PyPI Linux 默认 wheel 拉取 CUDA 13 工具链。依赖或模型下载失败时应查看构建日志，不无限重试。
 - 模型/索引/知识不随镜像分发；宿主机需按 `docs/standalone.md` 恢复。
 - 旧 `serve.py --instance-config` 本机模式保持兼容；`RVS_SERVE_STATIC` 默认仍为 true，只有容器示例显式关闭。

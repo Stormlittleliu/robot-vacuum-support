@@ -1,0 +1,8 @@
+# Docker-only dependency set.  Local development keeps using requirements.txt.
+#
+# sentence-transformers requires torch, and PyPI's Linux torch wheel declares
+# the CUDA 13 toolkit (cublas/cudnn/nccl/... several GB) as a hard dependency.
+# This image performs CPU-only embedding inference, so pin the official CPU
+# wheel.  The Dockerfile supplies the PyTorch CPU index for this install only;
+# the regular requirements stay on PyPI.
+torch==2.15.0+cpu

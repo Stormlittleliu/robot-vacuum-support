@@ -255,6 +255,29 @@ def test_container_files_are_separated_and_asset_safe():
         assert marker in nginx
 
 
+def test_docker_requirements_use_cpu_torch_and_compose_reuses_image():
+    """Docker must not pull the multi-GB CUDA payload; local dev stays unchanged."""
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    assert compose["services"]["backend"]["image"] == (
+        "${RVS_BACKEND_IMAGE:-rvs-backend:smoke}"
+    )
+
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "requirements-docker.txt" in dockerfile
+    assert "-r /app/requirements-docker.txt" in dockerfile
+    assert "-r /app/requirements.txt" in dockerfile
+    assert "--index-url https://download.pytorch.org/whl/cpu" in dockerfile
+    assert "--mount=type=cache,target=/root/.cache/pip" in dockerfile
+
+    docker_reqs = (ROOT / "requirements-docker.txt").read_text(encoding="utf-8")
+    assert "torch==2.15.0+cpu" in docker_reqs
+    assert "nvidia" not in docker_reqs.lower()
+
+    local_reqs = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "download.pytorch.org" not in local_reqs
+    assert "+cpu" not in local_reqs
+
+
 def _load_entrypoint():
     path = ROOT / "docker" / "entrypoint.py"
     spec = importlib.util.spec_from_file_location("rvs_entrypoint", path)

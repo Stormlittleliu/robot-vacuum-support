@@ -9,6 +9,10 @@
 # missing. Never commit .env.docker.
 services:
   backend:
+    # Reuse the image produced by ``docker build -t rvs-backend:smoke .``.
+    # ``up --build`` still replays the Dockerfile layers from the local build
+    # cache, so a smoke run does not duplicate the dependency build.
+    image: ${RVS_BACKEND_IMAGE:-rvs-backend:smoke}
     build:
       context: .
       dockerfile: Dockerfile
