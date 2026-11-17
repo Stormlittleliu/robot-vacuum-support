@@ -13,6 +13,17 @@ v1 是后续唯一权威。
 
 本 README 是 P1 评测口径的权威说明。压测按来源与参与方式分为 AI 生成的刻意边界与对抗压测、人工探索性压测。来源、案例生成方式和评分方式分开保存，评分可以是机器评分或人工评审，AI 生成案例可人工复核，人工来源案例可机器评分，结果按测试来源与任务类型分别报告，开发压测结果不外推为真实用户总体成功率。AI 生成压测默认用现有 runner 与工具以有界、可复现输入程序化运行，保留状态、trace 与原始 JSON 证据。人工压测可选，带实际反馈，用户不必执行，未开展时记“未开展”，本身不阻塞开发或发布。单元、集成、故障测试仍按工程验证管理，不强制归入这两类来源。294 项待人工审核是历史待补证据，默认不设为前置门，既有 notes、数据集和 reviews 原样保留。当前自由体验反馈只记“在文档覆盖范围内未交互出明显问题”，不写运行次数、覆盖率或人工通过标签。
 
+## 整产品测试契约（强制）
+
+- 被测对象必须是完整、同版本的 Agent 产品 artifact/container，包含真实运行配置以及 prompt/context/state/tool/RAG 全链路，整体导入隔离测试环境。
+- 业务场景只通过正常产品入口触发：正式 HTTP/SSE 或 GUI。测试环境只隔离 data、storage、端口和凭据配置，不得改变产品组成。
+- 禁止另写 mini-agent、复制 prompt、直接调用 reducer/retriever 等替代整产品路径；禁止 mock/fake 核心链路后宣布产品通过。
+- 组件测试只作定位辅助，必须明确范围；不能替代完整产品验收，也不能独立计算 Agent 效果。现有 `state` 模式属组件级定位，不能替代 `live` 整产品验收。
+- 模型、知识、API 等依赖缺失时，记录未验证/阻塞，不得自动替换 fake 绕过。
+- 零模型人工路径只能证明完整产品的人工功能，不得据此宣称 Agent 全链路通过。
+- 评测器可外置，被测对象必须是整产品。报告须记录 artifact/image 版本、入口、隔离配置、实际执行路径和缺项；缺项不得以推测补齐。
+- 本节仅固化规则，不改变既有历史记录与结果，不新建门禁；未实际运行的评测如实记为未运行。
+
 ## 轮换主线验收集（development-next）
 
 `eval/development-next/rotating-mainline-v1/` 是 12 session 的紧凑轮换验收集：6 条回充主线（复用已有 grounded development 场景）+ 6 条广度题（每份知识文档一条）。比例、文档覆盖、去重、引用 hash/quote 和 manual-only oracle 由程序在模型调用前验证；live 只读复用 `robot_vacuum-v4-6aa0ba49c6`，隔离端口 8949、并发 2、一次运行。程序只做结构与证据绑定评分，回答语义是 agent inspection advisory，不是 Judge 通过或成功率。入口：`python scripts/run_rotating_mainline.py --validate-only` / `--run`；说明见 [docs/rotating-mainline-acceptance.md](../docs/rotating-mainline-acceptance.md)。
