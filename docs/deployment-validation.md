@@ -98,3 +98,44 @@ py -3.11 scripts/docker_deploy.py down --env-file .env.docker --project rvssmoke
 ```
 
 本次不重试、不下载更多 wheel、不安装软件。
+
+## 9. 本轮收尾（headless 约束，2026-11-17）
+
+用户新约束（最高优先）：**禁止启动或唤起 Docker Desktop，必须 headless；只连接已运行的 Docker Engine / headless Linux 服务器，不自动拉起 GUI；不停止用户已有的 Docker/WSL 进程**。
+
+### 9.1 约束检查结果
+
+- 全仓库检索 `Docker Desktop`、`open -a Docker`、`Start-Process ... Docker`、`com.docker`、`systemctl start docker` 等模式：**无匹配**，不存在需要移除的 GUI 启动逻辑。
+- `scripts/docker_deploy.py` 只在 `preflight` 中执行 `docker info --format "{{.ServerVersion}}"` 探测 Engine；返回码非 0 时把 `docker_daemon` 记为失败并阻塞，**没有**启动 daemon、启动 GUI、重启或停止任何 Docker/WSL 进程的代码路径。
+- 本轮只做只读探测与静态检查，没有执行 `up` / `smoke`，没有下载 wheel，没有构建镜像。
+
+### 9.2 本轮实际命令与结果
+
+```powershell
+docker info --format '{{.ServerVersion}}'
+```
+
+结果：输出 `29.4.3`，exit 0。这是**已存在的 Engine**，探测本身不启动或停止任何进程。因此本轮不构成“headless daemon 不可用”的阻塞；镜像构建阻塞仍来自上一轮的网络/哈希问题，与本约束无关。
+
+```powershell
+py -3.11 -m pytest tests/test_cloud_deployment.py tests/test_docker_deploy.py -q
+```
+
+结果：`13 passed, 1 warning`（与上一轮相同的 httpx 弃用提示，不影响断言）。
+
+```powershell
+git diff --check
+```
+
+结果：exit 0，无 whitespace error；只有仓库既有的 LF/CRLF 提示。
+
+### 9.3 本轮的未提交改动
+
+- `Dockerfile`：上一执行被取消前留下的改动——`PIP_RETRIES` 10→2、`PIP_TIMEOUT` 60→30，CPU torch 层改为 `--no-cache-dir` 以绕开曾哈希校验失败的 pip 缓存。**本轮未重新构建验证**，仅通过静态测试断言。
+- `docs/deployment.md`：新增“运行前提：headless，只连接已运行的 Engine”，明确不启动/不唤起 Docker Desktop、不启动 daemon、不停止用户已有进程。
+- 本节：记录本轮实际结果与该约束。
+
+### 9.4 仍然未验证
+
+- `docker build -t rvs-backend:smoke .` 未重跑，镜像仍未经确认。
+- `up` / `smoke`、18080 上的 HTTP/SSE、401、admin 代理、重启持久化均未执行，不得标为通过。

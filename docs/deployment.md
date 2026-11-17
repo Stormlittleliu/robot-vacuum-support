@@ -2,6 +2,15 @@
 
 本文给出可在本地验证的 Docker 交付文件。**没有云服务器凭据，因此没有声称线上部署成功**；验证范围见文末。部署是**单租户**：一个实例、一个共享访问 token、一个管理 token，不提供多用户账号、租户隔离或按用户授权。
 
+## 0. 运行前提：headless，只连接已运行的 Engine
+
+本仓库的脚本和文档**不启动、不唤起 Docker Desktop，也不启动任何 Docker daemon**：
+
+- 部署只面向**已经运行的 Docker Engine**，以及可 SSH 访问的 **headless Linux 服务器**；脚本只用 `docker info` 探测 Engine 是否可用，探测失败即报告阻塞，不会尝试拉起守护进程或 GUI。
+- 不停止、不重启用户已有的 Docker / WSL 进程；不修改全局 daemon、代理、registry 或网络配置。
+- `scripts/docker_deploy.py` 只做必要范围的预检、隔离 project 启停和 HTTP/SSE smoke；仓库内没有 `Docker Desktop`、`open -a Docker`、`Start-Process Docker` 之类的启动逻辑。
+- 若目标环境没有可用的 headless Engine，正确做法是报告阻塞并等待环境提供，而不是在本机安装或启动新的 daemon。
+
 ## 1. 交付物
 
 | 文件 | 作用 |
