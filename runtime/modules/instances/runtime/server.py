@@ -138,6 +138,42 @@ def _interpret_enabled() -> bool:
     return value not in {"off", "0", "false", "no"}
 
 
+def _failure_code(exc: BaseException) -> str:
+    try:
+        from core.llm.errors import failure_code
+
+        return failure_code(exc)
+    except Exception:  # noqa: BLE001 - very old artifact
+        return "run_error"
+
+
+def _failure_message(exc: BaseException) -> str:
+    try:
+        from core.llm.errors import safe_error_message
+
+        return safe_error_message(exc)
+    except Exception:  # noqa: BLE001 - very old artifact
+        return "本轮执行失败，请重试。"
+
+
+def _failure_retryable(exc: BaseException) -> bool:
+    try:
+        from core.llm.errors import failure_retryable
+
+        return failure_retryable(exc)
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def _failure_requires_configuration(exc: BaseException) -> bool:
+    try:
+        from core.llm.errors import failure_requires_configuration
+
+        return failure_requires_configuration(exc)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _new_turn_meter():
     return TurnUsage() if TurnUsage is not None else None
 
@@ -1576,6 +1612,18 @@ def create_app(config) -> FastAPI:
                     )
             except Exception as exc:  # noqa: BLE001 - delivered through SSE
                 # Keep the user/approval evidence and add an explicit error row.
+                # Provider/model text is reduced to a safe, typed message; never
+                # echo request headers or credential fragments into SSE/logs.
+                error_message = (
+                    str(exc)
+                    if isinstance(exc, ApprovalGone)
+                    else _failure_message(exc)
+                )
+                error_code = (
+                    "approval_gone"
+                    if isinstance(exc, ApprovalGone)
+                    else _failure_code(exc)
+                )
                 if SUPPORT_ENABLED and support_state is not None:
                     retrieval = getattr(exc, "retrieval", retrieval)
                     if retrieval is not None:
@@ -1592,16 +1640,22 @@ def create_app(config) -> FastAPI:
                             pass
                     support_payload = support_public_view(support_state)
                 try:
-                    store.append_message(session_id, "error", str(exc))
+                    store.append_message(session_id, "error", error_message)
+                except Exception:
+                    pass
+                try:
+                    # Session metadata is the product's run record: an
+                    # explicitly failed turn must not leave last_status=completed.
+                    store.update(session_id, last_status="error")
                 except Exception:
                     pass
                 updates.put(
                     {
                         "type": "error",
-                        "error": str(exc),
-                        "code": "approval_gone"
-                        if isinstance(exc, ApprovalGone)
-                        else "run_error",
+                        "error": error_message,
+                        "code": error_code,
+                        "retryable": _failure_retryable(exc),
+                        "requires_configuration": _failure_requires_configuration(exc),
                         "support": support_payload,
                         "retrieval": retrieval,
                     }

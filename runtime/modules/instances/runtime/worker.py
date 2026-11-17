@@ -400,9 +400,23 @@ class SessionProcess:
                         continue
                     if "error" in payload:
                         wait_status = "error"
-                        error = RuntimeError(payload["error"])
-                        if payload.get("code"):
-                            error.code = payload["code"]  # type: ignore[attr-defined]
+                        code = payload.get("code")
+                        try:
+                            from core.llm.errors import TurnFailure
+
+                            error = TurnFailure(
+                                code or "run_error",
+                                str(payload.get("error") or ""),
+                                retryable=bool(payload.get("retryable", True)),
+                                requires_configuration=bool(
+                                    payload.get("requires_configuration", False)
+                                ),
+                                http_status=payload.get("http_status"),
+                            )
+                        except Exception:  # noqa: BLE001 - very old artifact
+                            error = RuntimeError(payload["error"])
+                            if code:
+                                error.code = code  # type: ignore[attr-defined]
                         raise error
                     result = payload.get("result") or {}
                     self.pending_thread_id = (
@@ -705,9 +719,30 @@ def main() -> int:
                 protocol.write(json.dumps({"result": result}, ensure_ascii=False, default=str) + "\n")
                 protocol.flush()
         except Exception as exc:  # noqa: BLE001 - one failed request must not kill the worker
-            payload = {"error": str(exc)}
+            try:
+                from core.llm.errors import (
+                    failure_code,
+                    failure_requires_configuration,
+                    failure_retryable,
+                    safe_error_message,
+                )
+
+                payload = {
+                    "error": safe_error_message(exc),
+                    "retryable": failure_retryable(exc),
+                    "requires_configuration": failure_requires_configuration(exc),
+                }
+                code = getattr(exc, "code", None) or failure_code(exc)
+                http_status = getattr(exc, "http_status", None)
+                if http_status:
+                    payload["http_status"] = http_status
+            except Exception:  # noqa: BLE001 - very old artifact
+                payload = {"error": str(exc)}
+                code = getattr(exc, "code", None)
             if exc.__class__.__name__ == "ResumeGone":
-                payload["code"] = "approval_gone"
+                code = "approval_gone"
+            if code:
+                payload["code"] = str(code)
             protocol.write(json.dumps(payload, ensure_ascii=False) + "\n")
             protocol.flush()
     return 0

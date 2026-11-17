@@ -1249,6 +1249,9 @@ def build_http_client(
 # Record export
 # ---------------------------------------------------------------------------
 def _store_record(record: dict[str, Any]) -> None:
+    from core.observability.redact import redact_value
+
+    record = redact_value(record)
     with _RECORD_LOCK:
         _RECENT.append(record)
         directory = os.getenv(RECORD_DIR_ENV, "").strip()

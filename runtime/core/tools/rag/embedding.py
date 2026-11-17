@@ -5,8 +5,6 @@
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_core.embeddings import Embeddings
 
@@ -26,14 +24,15 @@ class LazyLocalEmbeddings(Embeddings):
             with latency.span("embedding.model_load", model=self.model_name):
                 from langchain_huggingface import HuggingFaceEmbeddings
 
-                from core.utils.path_tool import get_abs_path
+                from core.paths import resolve_model_path
 
-                model_path = self.model_name
-                if not Path(model_path).is_absolute():
-                    model_path = get_abs_path(model_path)
+                # Resolve against the worker's real AH_MODEL_ROOT at the point
+                # the embedding model is created.  A full-model-dir binding and
+                # the legacy parent-models-root binding are both supported.
+                model_path = resolve_model_path(self.model_name)
 
                 self._impl = HuggingFaceEmbeddings(
-                    model_name=model_path,
+                    model_name=str(model_path),
                     model_kwargs={"device": "cpu"},
                     encode_kwargs={"normalize_embeddings": True},
                 )

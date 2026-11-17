@@ -152,7 +152,9 @@ class _SpanWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def write(self, row: dict[str, Any]) -> None:
-        line = json.dumps(row, ensure_ascii=False, default=str)
+        from core.observability.redact import redact_value
+
+        line = json.dumps(redact_value(row), ensure_ascii=False, default=str)
         with _WRITE_LOCK:
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(line + "\n")

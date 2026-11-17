@@ -24,6 +24,8 @@ from langchain_core.callbacks import BaseCallbackHandler
 from core.observability.budget import RunBudget, context_scope, current_budget
 from core.observability import latency
 from core.observability.context import segments_from_messages
+from core.observability.redact import redact_value
+from core.llm.errors import provider_error_summary, safe_exception_summary
 from core.paths import OUTPUT_ROOT, output_path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -113,14 +115,14 @@ class TraceCallbackHandler(BaseCallbackHandler):
 
     # ===================== 写入 =====================
     def _write(self, event: str, **fields) -> None:
-        row = {
+        row = redact_value({
             "trace_id": self.trace_id,
             "thread_id": self.thread_id,
             "scenario": self.scenario,
             "event": event,
             "ts": datetime.now().isoformat(timespec="milliseconds"),
             **fields,
-        }
+        })
         try:
             with _WRITE_LOCK:
                 self._trace_dir.mkdir(parents=True, exist_ok=True)
@@ -309,7 +311,7 @@ class TraceCallbackHandler(BaseCallbackHandler):
         latency_ms = int((time.time() - start) * 1000) if start else None
         call_span = self._model_span.pop(str(run_id), None)
         if call_span is not None:
-            call_span.end(status="error", error=f"{type(error).__name__}: {str(error)[:160]}")
+            call_span.end(status="error", error=safe_exception_summary(error))
         token = self._model_span_token.pop(str(run_id), None)
         if token is not None:
             latency.pop_call_span(token)
@@ -320,7 +322,7 @@ class TraceCallbackHandler(BaseCallbackHandler):
             model=self._last_model,
             latency_ms=latency_ms,
             call_span_id=getattr(call_span, "span_id", None),
-            error=str(error),
+            error=provider_error_summary(error),
             node=node,
             **scope,
         )
@@ -450,7 +452,7 @@ class TraceCallbackHandler(BaseCallbackHandler):
 
     def on_chain_error(self, error, *, run_id, parent_run_id=None, **kwargs):
         if parent_run_id is None:
-            self.finalize("error", error=str(error))
+            self.finalize("error", error=safe_exception_summary(error))
 
     def finalize(self, status: str = "completed", error: str | None = None) -> None:
         """写 run_end；重复调用只写一次。"""

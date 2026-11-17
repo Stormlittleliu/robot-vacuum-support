@@ -47,6 +47,64 @@ def output_path(*parts: str) -> Path:
     return OUTPUT_ROOT.joinpath(*parts)
 
 
+def resolve_model_path(value: str | Path) -> Path:
+    """Resolve one configured model path against ``AH_MODEL_ROOT``.
+
+    Two deployment conventions are both supported:
+
+    * legacy parent root: ``AH_MODEL_ROOT=/assets/models`` and
+      ``embedding_model_name=data/models/bge-small-zh-v1.5`` -> root/bge-...
+    * full model directory (current Docker binding):
+      ``AH_MODEL_ROOT=/assets/models/bge-small-zh-v1.5`` and the same config
+      value -> the root itself, never root/bge-... (double nesting).
+
+    The basename check is the discriminator.  If a parent root happens to have
+    the same basename and the child directory really exists, the child wins so
+    the legacy convention is not broken.
+    """
+    raw = Path(str(value or "")).expanduser()
+    if raw.is_absolute():
+        return raw
+    normalized = raw.as_posix()
+    if normalized == "data/models":
+        suffix = ""
+    elif normalized.startswith("data/models/"):
+        suffix = normalized[len("data/models/"):]
+    elif normalized == "models":
+        suffix = ""
+    elif normalized.startswith("models/"):
+        suffix = normalized[len("models/"):]
+    else:
+        suffix = normalized.lstrip("./")
+    if not suffix:
+        return MODEL_ROOT
+    requested = Path(suffix)
+    candidate = MODEL_ROOT / requested
+    if MODEL_ROOT.name == requested.name:
+        if _looks_like_model_dir(MODEL_ROOT):
+            return MODEL_ROOT
+        if _looks_like_model_dir(candidate):
+            return candidate
+        return MODEL_ROOT if MODEL_ROOT.is_dir() else candidate
+    return candidate
+
+
+_MODEL_DIR_MARKERS = (
+    "modules.json",
+    "config_sentence_transformers.json",
+    "config.json",
+    "model.safetensors",
+    "pytorch_model.bin",
+)
+
+
+def _looks_like_model_dir(path: Path) -> bool:
+    try:
+        return path.is_dir() and any((path / name).is_file() for name in _MODEL_DIR_MARKERS)
+    except OSError:
+        return False
+
+
 def resolve_data_path(path: str | Path) -> Path:
     """把 ``data/...`` 相对路径解析到 DATA_ROOT；绝对路径原样返回。"""
     value = Path(path)
@@ -60,7 +118,7 @@ def resolve_data_path(path: str | Path) -> Path:
     if normalized == "data/models":
         return MODEL_ROOT
     if normalized.startswith("data/models/"):
-        return MODEL_ROOT / normalized[len("data/models/"):]
+        return resolve_model_path(normalized)
     if normalized.startswith("data/specs/"):
         return SPEC_ROOT / normalized[len("data/specs/"):]
     if normalized.startswith("data/"):

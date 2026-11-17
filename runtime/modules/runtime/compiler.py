@@ -83,13 +83,16 @@ def _instrumented(node_id: str, fn: Callable[..., Any]) -> Callable[..., Any]:
             result = fn(state, **kwargs)
         except Exception as exc:
             if sink is not None:
+                from core.llm.errors import failure_code, safe_exception_summary
+
                 sink({
                     "event": "node_error",
                     "node": node_id,
                     "ts": time.time(),
                     "activation": activation,
                     "latency_ms": int((time.time() - started) * 1000),
-                    "error": f"{type(exc).__name__}: {exc}",
+                    "code": failure_code(exc),
+                    "error": safe_exception_summary(exc),
                 })
             raise
         if sink is not None:

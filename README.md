@@ -124,6 +124,7 @@ Invoke-RestMethod http://127.0.0.1:8902/api/instance
 - [产品界面截图（headless Chrome，8902）](docs/images/demo-8902-headless-20261117.png)
 - [PDF 检索修复：8→101 块与私有索引 coverage](docs/pdf-retrieval-fix.md)
 - [两个优化回路的证据与边界](docs/optimization-loops.md)
+- [三主线修复记录：401 传播 / embedding 路径 / fallback 更正撤回](docs/three-mainlines-fix-v1.md)
 - [Release v1 交付说明](docs/release-v1.md)
 
 演示只核对功能是否出现和边界是否守住，不背固定答案。不要把结构检查写成成功率，也不要把本地摘要写成外部工单。

@@ -452,6 +452,9 @@ def evaluate_turn(case: dict[str, Any], turn: dict[str, Any], result: dict[str, 
         "question": turn.get("content"),
         "answer": answer,
         "error": result.get("error"),
+        "error_code": result.get("error_code"),
+        "error_retryable": result.get("error_retryable"),
+        "error_requires_configuration": result.get("error_requires_configuration"),
         "http_status": result.get("http_status"),
         "latency_ms": result.get("latency_ms"),
         "transport_attempts": result.get("transport_attempts"),
@@ -514,6 +517,9 @@ def run_case(case: dict[str, Any], token: str, suite: dict[str, Any]) -> dict[st
                     "usage": answer.get("usage"),
                     "http_status": 200,
                     "error": error.get("error"),
+                    "error_code": error.get("code"),
+                    "error_retryable": error.get("retryable"),
+                    "error_requires_configuration": error.get("requires_configuration"),
                     "events": events,
                     "transport_attempts": attempts,
                     "latency_ms": latency_ms,
@@ -540,7 +546,13 @@ def run_case(case: dict[str, Any], token: str, suite: dict[str, Any]) -> dict[st
         try:
             detail = http_json(BASE_URL + f"/api/sessions/{session_id}", token, timeout=30)
             record["final_support"] = detail.get("support")
+            record["session_last_status"] = detail.get("last_status")
             transcript = detail.get("transcript") or []
+            record["session_error_messages"] = [
+                str(item.get("content") or "")
+                for item in transcript
+                if isinstance(item, dict) and str(item.get("role")) == "error"
+            ]
             record["session_transcript"] = {
                 "message_count": len(transcript),
                 "roles": [m.get("role") for m in transcript if isinstance(m, dict)],
@@ -568,12 +580,16 @@ def latency_stats(values: list[float]) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global OUT_DIR
     parser = argparse.ArgumentParser()
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--run", action="store_true")
     parser.add_argument("--env-file", default=str(ROOT / ".env.docker"))
+    parser.add_argument("--out-dir", default=str(OUT_DIR))
+    parser.add_argument("--post-fix", action="store_true")
     parser.add_argument("--no-stop", action="store_true")
     args = parser.parse_args(argv)
+    OUT_DIR = Path(args.out_dir).resolve()
     suite = read_json(SUITE_DIR / "suite.json")
     cases_doc = read_json(SUITE_DIR / "cases.json")
     validation = validate(suite, cases_doc)
@@ -711,6 +727,9 @@ def main(argv: list[str] | None = None) -> int:
             "failed_checks": failed,
             "latency_stats": latency_stats(latencies),
             "errors": [turn.get("error") for turn in row.get("turns") or [] if turn.get("error")],
+            "error_codes": [turn.get("error_code") for turn in row.get("turns") or [] if turn.get("error_code")],
+            "session_last_status": row.get("session_last_status"),
+            "session_error_messages": row.get("session_error_messages"),
             "final_state": (row.get("turns") or [{}])[-1].get("state") if row.get("turns") else None,
             "turn_summaries": [
                 {
@@ -724,6 +743,7 @@ def main(argv: list[str] | None = None) -> int:
                     "cited_sources": next((c.get("detail", {}).get("cited") for c in turn.get("checks") or [] if c.get("id") == "citation_filename_present"), []),
                     "state": turn.get("state") if row.get("state_applicable") else None,
                     "errors": turn.get("error"),
+                    "error_code": turn.get("error_code"),
                 }
                 for turn in row.get("turns") or []
             ],
@@ -817,11 +837,17 @@ def main(argv: list[str] | None = None) -> int:
             "Program checks prove structure/evidence binding, not semantic correctness.",
             "The image is the full product image; only data/storage/port/credentials are isolated.",
             "Artifact id is generated inside the container at startup; the image id and source fingerprint are the version anchors.",
-            "No runtime, prompt, judge, reducer, retriever or interpreter was modified or directly called.",
+            (
+                "Post-fix regression: runtime was changed for model-failure propagation, embedding model path and fallback correction. Frozen cases/suite were not changed."
+                if args.post_fix
+                else "No runtime, prompt, judge, reducer, retriever or interpreter was modified or directly called."
+            ),
         ],
         "not_holdout": True,
         "not_success_rate": True,
-        "no_runtime_prompt_change": True,
+        "post_fix_regression": bool(args.post_fix),
+        "no_runtime_prompt_change": not args.post_fix,
+        "frozen_suite_unchanged": after_freeze["unchanged"],
         "no_direct_component_calls": True,
     }
     write_json(OUT_DIR / "report.json", report)

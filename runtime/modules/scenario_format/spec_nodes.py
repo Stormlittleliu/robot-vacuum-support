@@ -1273,10 +1273,23 @@ def react_loop(
             answer_text = _content(messages[-1]).strip() if messages else ""
             emit_token(answer_text)
     except Exception as exc:  # noqa: BLE001
-        return {"answer": "", "scratch": _merge_scratch(state, error=f"react_loop 执行失败：{exc}")}
+        # A provider/model failure must cross the node boundary as a typed
+        # failure.  Swallowing it here produced the old HTTP-200 empty answer
+        # with a completed run_end; the worker/server now turn this into an SSE
+        # error and a failed run record.
+        from core.llm.errors import as_turn_failure
 
-    answer = answer_text
+        raise as_turn_failure(exc) from exc
+
+    answer = answer_text.strip()
+    if not answer:
+        from core.llm.errors import ModelOutputFailure
+
+        raise ModelOutputFailure("model_empty_answer")
     error = None
     if stop_when == "answer_has_citation" and not re.search(CITATION_PATTERN, answer):
+        # Keep the useful answer and record the validation gap.  The product's
+        # citation contract is checked by the structural runner; a missing
+        # bracket is not a provider failure and must not be relabelled as 401.
         error = "回答缺少 [来源] 引用"
     return {"answer": answer, "scratch": _merge_scratch(state, error=error)}

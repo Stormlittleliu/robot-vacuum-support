@@ -28,9 +28,9 @@ def get_abs_path(relative_path:str)->str:
     """
     normalized = str(relative_path).replace("\\", "/")
     if normalized == "data/models" or normalized.startswith("data/models/"):
-        from core.paths import MODEL_ROOT
-        suffix = normalized[len("data/models"):].lstrip("/")
-        return str(MODEL_ROOT / suffix if suffix else MODEL_ROOT)
+        from core.paths import resolve_model_path
+
+        return str(resolve_model_path(normalized))
     if normalized == "data/runtime" or normalized.startswith("data/runtime/"):
         from core.paths import RUNTIME_ROOT
 

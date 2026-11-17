@@ -157,6 +157,23 @@ _NEGATED_ACTION = re.compile(
     r"还没(?:试|清理|擦|清洁|检查|重启)|未(?:试|处理|清理)|"
     r"不打算(?:试|清理|擦)|不想(?:试|清理|擦)|没用过|没清(?!楚|干净)"
 )
+#: A correction can explicitly withdraw an execution claim without using the
+#: short verb list above ("其实我没有把它放回充电座").  This is still a general
+#: negation-of-action rule: the action mention must be in the same clause, after
+#: the negation, and must not be a result complement ("没清理干净" means the user
+#: did try).  It is only consulted when a correction cue is present.
+_CORRECTION_NEGATION = re.compile(
+    r"(?:没|没有|未|还没|从没).{0,10}"
+    r"(?:放回|对准|归位|按|试|试过|用|打开|关闭|搬|挪|换|清理|擦|清洁|检查|重启)"
+    r"(?!干净|好|完|到位|彻底)"
+)
+#: Mention patterns used only for not-tried extraction.  ``check_auto_return``
+#: is a settings identity in the execution catalogue, but a correction such as
+#: "自动回充也还没再试" is still a not-tried statement about that step family.
+_NEGATED_ACTION_PATTERNS = dict(ACTION_PATTERNS)
+_NEGATED_ACTION_PATTERNS["check_auto_return"] = re.compile(
+    r"自动回充|自动返回|回充设置|地图.{0,8}(?:设置|位置|改动|修改)"
+)
 #: Generalized negation ("都没试过/一个都没做").  With no explicit action object
 #: the reducer binds it to the last-asked actions or pending suggestions; it
 #: never negates all historical tried actions.
@@ -993,17 +1010,27 @@ def _negated_action_ids(text: str) -> set[str]:
 
     "没清理触点，清理了充电座周围" must mark only the contact step as
     negated; a fixed character window would incorrectly swallow both actions.
+    A correction may withdraw a previous assertion using a longer phrase
+    ("其实我没有把它放回充电座"); that path is still clause-scoped and never
+    treats a result complement ("没清理干净") as "not tried".
     """
     value = str(text or "")
-    if not _NEGATED_ACTION.search(value):
+    correction = bool(_CORRECTION.search(value))
+    if not (
+        _NEGATED_ACTION.search(value)
+        or (correction and _CORRECTION_NEGATION.search(value))
+    ):
         return set()
     result: set[str] = set()
-    for action_id, pattern in _ACTION_PATTERNS.items():
+    for action_id, pattern in _NEGATED_ACTION_PATTERNS.items():
         for match in pattern.finditer(value):
             if clause_scope_at(value, match.start()):
                 continue
             clause = _clause_at(value, match.start())
-            if not _NEGATED_ACTION.search(clause):
+            if not (
+                _NEGATED_ACTION.search(clause)
+                or (correction and _CORRECTION_NEGATION.search(clause))
+            ):
                 continue
             if claim_rejection(action_id, match.group(0), value) is not None:
                 continue
@@ -2765,6 +2792,29 @@ def _apply_user_turn_impl(
         quote = str(item.get("evidence_quote") or "")
         if claim_rejection(action_id, quote, value) is None:
             negated_ids.add(action_id)
+
+    # A correction that cannot be tied to a clear action negation must not
+    # silently keep the old fact as if the correction had been understood.
+    # Record the uncertainty without inventing either a retraction or a new
+    # tried fact; a later explicit turn can resolve it.
+    if _CORRECTION.search(value) and not negated_ids and not explicit_ids:
+        _append_fact_audit(
+            active,
+            kind="correction_without_retraction",
+            action_id=None,
+            message_id=message_id,
+            turn=turn,
+            text=value,
+            reason="no_clear_action_negation_evidence",
+            replaced_fact=None,
+            now=stamp,
+        )
+        active["correction_unresolved"] = {
+            "text": _excerpt(value),
+            "message_id": message_id,
+            "turn": turn,
+            "reason": "no_clear_action_negation_evidence",
+        }
 
     # A semantic proposal that says the same action was both executed and not
     # tried is internally contradictory.  Record the ambiguity instead of

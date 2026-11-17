@@ -716,7 +716,9 @@ class LlmTurnInterpreter:
                 "retry_reason": retry_reason,
             }
         except Exception as exc:  # noqa: BLE001 - caller records fallback
-            raise RuntimeError(f"turn interpretation failed: {type(exc).__name__}: {str(exc)[:160]}") from exc
+            from core.llm.errors import as_turn_failure
+
+            raise as_turn_failure(exc) from exc
 
 
 def _trace(
@@ -788,11 +790,13 @@ def interpret_turn(
             ),
         }
     except Exception as exc:  # noqa: BLE001 - fallback is the product contract
+        from core.llm.errors import safe_exception_summary
+
         return {
             "interpretation": fallback,
             "trace": _trace(
                 method="fallback",
                 latency_ms=int((time.perf_counter() - started) * 1000),
-                fallback_reason=f"{type(exc).__name__}: {str(exc)[:160]}",
+                fallback_reason=safe_exception_summary(exc),
             ),
         }
