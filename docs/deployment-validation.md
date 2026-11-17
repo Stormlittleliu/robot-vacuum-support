@@ -1,6 +1,6 @@
 # Docker 部署验证记录（2026-11-17）
 
-状态：**镜像构建阻塞，compose smoke 未执行**。本文只记录实际跑过的命令和结果；没有确认 `rvs-backend:smoke` 镜像，没有启动 `rvssmoke`，也不声称 18080 上的 HTTP/SSE、未授权拒绝、代理 admin 或重启持久化通过。
+状态（截至 2026-11-17 21:07）：**本地隔离 compose 演示通过，服务保留运行供验收；模型聊天未调用，边界见第 11 节。** 第 1–9 节保留当时“镜像构建阻塞”的历史记录，第 10 节是首次真实闭环，第 11 节是本轮最终验收。本文只记录实际跑过的命令和结果，不把预检或单元测试当作部署成功。
 
 ## 1. 结论
 
@@ -208,3 +208,158 @@ py -3.11 -m pytest tests/test_cloud_deployment.py tests/test_docker_deploy.py -q
 - 没有推镜像、没有公网域名/TLS/云主机、没有多用户或并发负载验证。
 - 没有做浏览器端交互测试；只验证了 nginx 提供的 `healthz`、`admin.html` 和 API 代理。
 - 首次构建仍依赖 PyPI/PyTorch 网络；后续重建应命中本地层缓存和 pip cache（torch 层因 `--no-cache-dir` 需要重新下载，除非层缓存命中）。
+
+## 11. 最终验收：真实 compose、人工闭环与重启持久化（2026-11-17 21:00–21:07）
+
+状态：**通过（有明确边界）**。本轮只连接**已存在**的 Docker Engine，没有启动或唤起 Docker Desktop，没有启动任何 daemon/GUI，没有停止用户已有的 Docker/WSL 进程，也没有修改全局代理、registry、WSL 或网络配置。
+
+### 11.1 引擎与镜像复用
+
+```powershell
+docker info --format '{{.ServerVersion}}'
+```
+
+结果：`29.4.3`，exit 0；这是已有 Engine，不是本轮启动的。
+
+镜像先做 `docker image inspect` 和容器内检查：
+
+```text
+rvs-backend:smoke
+id=sha256:cd562e9c43461640e1257e73e7b621bb0a6e5801707c063c66e13398328eadf3
+created=2026-11-17T12:57:59.751500903Z
+size=625,626,835 bytes
+torch=2.15.0+cpu
+torch.cuda.is_available()=False
+sentence-transformers=6.2.0
+chromadb=1.5.9
+```
+
+镜像内 `source_fingerprint` 与当前工作树一致（`6021c0a6…e64926`），说明镜像包含当前 `runtime/`、`robot_vacuum/`、`product_ui/`、`project.json`、`requirements.txt`。运行中的 `rvssmoke-backend-1` 使用同一镜像 ID。
+
+第 10.1 节记录的 `b017…` 是上一轮同一构建的镜像 ID；本轮 tag 重新导出后指向新的 manifest `cd562…`，created/size/源码指纹未变，不是重新下载或重装依赖。
+
+随后只做缓存刷新，没有重新下载依赖：
+
+```powershell
+docker build --progress=plain -t rvs-backend:smoke .
+```
+
+结果：exit 0；所有应用/依赖层 `CACHED`，导出 0.3 秒，没有访问 PyPI/PyTorch CDN，没有关闭哈希或 TLS 校验，也没有使用 `--trusted-host`。
+
+### 11.2 预检与启动
+
+```powershell
+py -3.11 scripts/docker_deploy.py preflight --env-file .env.docker --project rvssmoke --public-port 18080
+py -3.11 scripts/docker_deploy.py up --env-file .env.docker --project rvssmoke --public-port 18080 --skip-preflight
+```
+
+预检 `ok=true`，`failed=[]`；token 存在/互异/非占位、`.env.docker` 私有、gitignore/dockerignore、knowledge/models/rag_index、18080 空闲、Engine、compose config 全为 true。命令没有输出 token 值。
+
+`up` 使用隔离 project `rvssmoke` 和 18080。backend 只 expose 内部 8000，frontend 是唯一发布端口；等待后两个 service 均为 healthy：
+
+```text
+backend   Up (healthy)   8000/tcp
+frontend  Up (healthy)   0.0.0.0:18080->8080/tcp
+```
+
+### 11.3 HTTP / 认证 / 人工闭环
+
+`smoke` 在真实 nginx 端口上 15 项全为 true：`/healthz`、`/api/health/live`、`/api/health/ready`、无 token 401、access token 200、创建会话、申请人工、handoff SSE、admin 经 nginx 200、用户 token 访问 admin 401、`/admin.html` 200、日志不含 token/provider 值。
+
+本轮新增的完整人工链路（全部经 `http://127.0.0.1:18080`，26 项检查全为 true）：
+
+1. 创建 session `s-ce027d9552ad4431`；
+2. 申请人工，工单 `waiting`；
+3. 用户消息走 handoff SSE，只出现 `handoff` 和 `done`，没有 assistant 事件；
+4. admin 等待列表/详情可见该 session 与排队消息；
+5. admin 接手，工单 `active`；
+6. 人工回复成功；同一 `request_id` 重放返回 `duplicate=true`；
+7. 用户前台通过 `/api/sessions/{id}/handoff/messages?after=0` 读到人工回复；
+8. admin 结案，工单 `closed`，会话详情同步显示 `closed`；
+9. 最终 transcript 角色为 `user`、`human`，`assistant_messages=0`，0 次模型调用。
+
+`/api/health/ready` 返回 200 且 `ready=true`；本轮 provider key 已配置（`model.configured=true`），因此没有触发“无 key → degraded/needs_configuration”的路径，也不声称测试过该路径。没有发出任何聊天/LLM 请求。
+
+### 11.4 容器内 BGE / Chroma 离线验证
+
+用一个与 backend 同镜像的一次性容器，`--network none` 完全离线，只读挂载同一份本地模型和索引：
+
+```text
+torch_cpu=true
+bge_import=true
+embedding_dim=512
+chroma_import=true
+collection=agent
+collection_count=823
+retrieval_hits=2
+top_source=故障排除.txt
+llm_calls=0
+```
+
+查询“充电座一直闪红灯怎么办”命中“故障排除.txt”，证明本地 BGE 可加载、Chroma 集合可检索，且没有模型/网络调用。
+
+Chroma 即使只查询也会以读写方式打开 SQLite；直接打开 `:ro` 挂载会报 `attempt to write a readonly database`。探针按生产 worker 的 `copy_rag_index` 方式，先把只读索引复制到容器内可写临时目录再查询；这是预期实现细节，不是服务故障。
+
+### 11.5 重启后的 session / ticket 持久化
+
+```powershell
+# 验收脚本与报告在本地 gitignored 的 outputs/deployment-final-v1/，不随仓库发布
+py -3.11 outputs/deployment-final-v1/persistence_flow.py create
+docker compose --project-name rvssmoke --env-file .env.docker restart backend
+# 等待 /api/health/ready 返回 200
+py -3.11 outputs/deployment-final-v1/persistence_flow.py verify
+```
+
+重启前创建 session `s-2419bde365a743bd`、工单 `h-7aed732a06d6`（`active`），并写入一条人工回复。仅重启 backend 后，10 项检查全为 true：
+
+- session id、`created_at`、工单 id、工单状态、transcript 长度、人工消息 id、回复文本均与重启前一致；
+- 用户前台重新轮询仍能读到该人工回复；
+- 命名卷 `rvssmoke_rvs-data` 保留，frontend 在 backend 重启期间保持 healthy。
+
+这补上了第 10.6 节“未核对 ticket id 一致”的缺口；本轮仍未做 `down` 后再 `up` 的完整卷往返，不声称已验证。
+
+### 11.6 密钥、日志与报告
+
+- 全程没有打印、写入报告或提交任何 token/provider key 值；只读取 `.env.docker` 做认证和存在性检查。
+- 重启后再次运行 `smoke`，`logs_no_token=true`、`logs_no_provider_value=true`。
+- 本地报告 `outputs/deployment-final-v1/report.json` 及证据文件不含密钥；仓库公开文档只写 token 的**文件与键名**，不写值。
+
+### 11.7 定向测试
+
+```powershell
+py -3.11 -m pytest tests/test_cloud_deployment.py tests/test_docker_deploy.py tests/test_handoff_admin.py -q
+py -3.11 -m pytest tests/test_rag_ingestion_coverage.py -q
+git diff --check
+```
+
+结果：
+
+- 部署/人工链路：`18 passed, 1 warning`（httpx per-request cookies 弃用提示，不影响断言）。
+- RAG 主机测试：收集阶段失败，原因是本机 Python 缺少 `langchain_chroma`；**不记为通过**。镜像内该依赖存在，且上面的离线 BGE/Chroma 检索探针通过；这是主机环境缺少可选依赖，不是本轮部署回归。
+- `git diff --check`：exit 0。
+
+### 11.8 保留的演示与访问方式
+
+compose 演示**保留运行**，供用户验收：
+
+- 用户前台：`http://127.0.0.1:18080/`
+- 人工后台：`http://127.0.0.1:18080/admin.html`
+- OpenAPI：`http://127.0.0.1:18080/api/docs`
+- 就绪：`http://127.0.0.1:18080/api/health/ready`
+- token 位置：`.env.docker` 中的 `RVS_ACCESS_TOKEN` 与 `RVS_ADMIN_TOKEN`；**值不在本文、报告或提交中**。
+
+停止但不删除会话数据：
+
+```powershell
+py -3.11 scripts/docker_deploy.py down --env-file .env.docker --project rvssmoke
+```
+
+### 11.9 本轮边界
+
+- 没有云主机、域名、TLS 或真实公网流量；这是本地 compose 演示，不是生产 SLA。
+- 没有调用 LLM；聊天质量、provider 延迟和计费未验证；人工链路本身设计为 0 模型调用。
+- 没有强制测试“无 provider key → degraded readiness”路径。
+- 只做了一次离线检索查询，不代表检索质量评测。
+- 没有浏览器自动化；只验证 HTTP/SSE、nginx 代理和静态页面返回。
+- 未重复 `down` 后再 `up` 的卷往返；只验证容器 restart 后的持久化。
+- 仍是单租户、单 uvicorn worker；没有多用户隔离或并发压测。
