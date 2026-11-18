@@ -32,20 +32,85 @@ def _frozen_spec() -> ScenarioSpec:
     return ScenarioSpec(**json.loads((ROOT / "robot_vacuum" / "v4.json").read_text(encoding="utf-8")))
 
 
-def test_agent_spec_resolves_native_react_agent_not_wrapper_graph():
+def test_non_default_stop_when_spec_stays_workflow():
+    """answer_has_citation is not the default stop; it must keep the graph."""
     spec = _frozen_spec()
     scenario = build_from_spec(
         spec,
         tools=[_Tool("rag_summarize"), _Tool("rag_retrieve")],
         model=object(),
     )
-    assert scenario.mode == "agent"
-    assert scenario.execution.workflow_factory is None
-    assert scenario.execution.stop_when == "answer_has_citation"
+    assert scenario.mode == "workflow"
+    assert callable(scenario.execution.workflow_factory)
+    assert scenario.execution.stop_when == "no_tool_calls"
     assert [tool.name for tool in scenario.tools] == ["rag_summarize", "rag_retrieve"]
-    # The single react_loop node is the Agent config, not a workflow node.
     assert scenario.tool_call_limit is None
     assert scenario.enable_summarization is True
+
+
+def test_exact_default_single_loop_resolves_native_agent():
+    spec = ScenarioSpec(
+        name="native",
+        description="native",
+        tools=["rag_summarize"],
+        workflows={
+            "agent": {
+                "nodes": [
+                    {
+                        "id": "agent",
+                        "fn": "react_loop",
+                        "args": {"tools": ["rag_summarize"], "stop_when": "no_tool_calls"},
+                    }
+                ],
+                "edges": [["__start__", "agent"], ["agent", "__end__"]],
+            }
+        },
+    )
+    scenario = build_from_spec(spec, tools=[_Tool("rag_summarize")], model=object())
+    assert scenario.mode == "agent"
+    assert scenario.execution.workflow_factory is None
+    assert scenario.execution.stop_when == "no_tool_calls"
+    assert [tool.name for tool in scenario.tools] == ["rag_summarize"]
+
+
+def test_native_recognition_is_conservative_about_edges_and_stop_semantics():
+    from modules.scenario_format.modes import agent_contract_issues, infer_scene_mode
+
+    node = {
+        "id": "agent",
+        "fn": "react_loop",
+        "args": {"tools": ["rag_summarize"]},
+    }
+    exact = {
+        "workflows": {
+            "agent": {
+                "nodes": [node],
+                "edges": [["__start__", "agent"], ["agent", "__end__"]],
+            }
+        }
+    }
+    assert infer_scene_mode(exact) == "agent"
+
+    non_default = json.loads(json.dumps(exact))
+    non_default["workflows"]["agent"]["nodes"][0]["args"]["stop_when"] = "answer_has_citation"
+    assert infer_scene_mode(non_default) == "workflow"
+    non_default["mode"] = "agent"
+    assert agent_contract_issues(non_default)
+
+    conditional = json.loads(json.dumps(exact))
+    conditional["workflows"]["agent"]["edges"] = [
+        ["__start__", "agent"],
+        ["agent", "__end__", "has_citation"],
+    ]
+    assert infer_scene_mode(conditional) == "workflow"
+
+    extra = json.loads(json.dumps(exact))
+    extra["workflows"]["agent"]["edges"] = [
+        ["__start__", "agent"],
+        ["agent", "__end__"],
+        ["agent", "agent"],
+    ]
+    assert infer_scene_mode(extra) == "workflow"
 
 
 def test_workflow_spec_keeps_real_graph():

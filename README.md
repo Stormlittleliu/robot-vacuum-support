@@ -4,6 +4,8 @@
 
 > **Release v1（2026-11-15）** 最终产物 `robot_vacuum-v4-24f3a3db39`，本地交付配置 `outputs/release-v1/instance-8902.json`（端口 8902）。该配置、产物和运行会话都在本地，**不随 GitHub 仓库发布**；克隆后请按下方步骤用本地资产重建。最新 Demo 验收见 [docs/demo-acceptance.md](docs/demo-acceptance.md)，交付范围见 [docs/standalone.md](docs/standalone.md)。
 
+> **Runtime/场景重构（2026-11-18）** 最终完整 artifact `robot_vacuum-v4-532c735eec` 已在隔离端口 18082 通过正常 HTTP/SSE 整产品验证。native 识别收紧为 exact 单 `react_loop` + 默认 `stop_when=no_tool_calls`；`answer_has_citation` 继续走 workflow，`FrameworkAgent` 仍是唯一装配点。契约、差异消除和实测见 [docs/runtime-refactor.md](docs/runtime-refactor.md)。该 artifact、配置和证据在本地，不入库。
+
 ## 快速开始（克隆后）
 
 仓库只发布代码、文档、测试和小型 case 数据。6 份知识原文、本地 embedding 模型和 Chroma 索引因体积或再分发授权原因不入库，需要先从可信本地备份恢复到 `assets/`：
@@ -125,6 +127,7 @@ Invoke-RestMethod http://127.0.0.1:8902/api/instance
 - [PDF 检索修复：8→101 块与私有索引 coverage](docs/pdf-retrieval-fix.md)
 - [两个优化回路的证据与边界](docs/optimization-loops.md)
 - [三主线修复记录：401 传播 / embedding 路径 / fallback 更正撤回](docs/three-mainlines-fix-v1.md)
+- [Runtime/场景重构：native 识别收紧、workflow 保留与最终整产品验证](docs/runtime-refactor.md)
 - [Release v1 交付说明](docs/release-v1.md)
 
 演示只核对功能是否出现和边界是否守住，不背固定答案。不要把结构检查写成成功率，也不要把本地摘要写成外部工单。
@@ -191,7 +194,7 @@ robot-vacuum-support/
 - 转人工摘要只在本地整理，不生成外部工单；复制/下载不等于操作系统剪贴板审计。
 - 云部署是单租户：访问 token 是共享门禁，不做多用户账号/会话所有权；持有同一 token 的访客可互看该实例会话。
 - 没有云服务器/域名/证书凭据，未做真实线上部署或生产 SLA 验证；Docker 本地 build 受网络限制时如实记录为阻塞。
-- 12 案结构验收可接受，其中 1 条原始 `retrieval_attempted=false` 保留为 lineage finding，不改写成通过。
+- 12 案结构验收的冻结预期未改；最终 artifact 本轮为 11 `passed_structural` / 1 `failed_structural`（`ml-recharge-normal-closure` 第二轮 `retrieval_attempted=false`）。此前同样失败过、本轮结构通过的 `ml-suction-correction-third-party` 不据此写成缺陷已修复；单次运行不是成功率。
 - 本仓库不包含父工作区计划、构建产物、运行会话、人工审核原文和未授权资料；历史文档中的 `outputs/...` 链接表示本地证据位置。
 
 ## 测试

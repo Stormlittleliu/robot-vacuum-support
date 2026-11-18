@@ -8,7 +8,7 @@
 
 - `agent`：普通 Agent 直接执行 `FrameworkAgent`，不构造 wrapper graph，不经过 `WorkflowRuntime`。
 - `workflow`：保留真实 LangGraph；只有 workflow 才执行 `workflow_factory`。
-- 旧 spec 没有显式 `mode` 时按现有结构推断：单个 `react_loop` + `START/END` 直连 → `agent`，其它 → `workflow`。
+- 旧 spec 没有显式 `mode` 时按结构保守推断：恰好一个 workflow、唯一 `react_loop`、恰好两条无条件边 `START → react_loop → END`，且 `stop_when` 缺省或为 `no_tool_calls` → `agent`；多节点、额外/条件边、`answer_has_citation` 等非默认停止语义 → `workflow`。没有图的原生配置仍为 `agent`。
 
 `ScenarioSpec` 现在接受可选 `mode` 字段；`Scenario.mode` / `ExecutionSpec.mode` 保存解析结果。
 
@@ -21,12 +21,14 @@
 | `react_loop.args.tools` | `Scenario.tools` |
 | `react_loop.args.prompt`（空则用场景提示词） | `Scenario.system_prompt` |
 | `react_loop.args.max_steps` | `Scenario.tool_call_limit`（0 = 不启用） |
-| `react_loop.args.stop_when` | `ExecutionSpec.stop_when`，回答后校验；缺引用只记录 validation gap，不改写成 provider error |
+| `react_loop.args.stop_when` | 只有缺省/`no_tool_calls` 能投影到原生 Agent；`answer_has_citation` 等非默认语义整图保留 `workflow`，由 `FrameworkAgent` 节点回答后校验并写 `scratch.error`（validation gap，不改写成 provider error） |
 | `harness.enable_summarization` | 场景 policy，原生 Agent 实际装配 `SummarizationMiddleware` |
 | `harness.enable_todo` | 场景 policy |
 | `harness.token_budget` | 场景 policy |
 
 旧 `workflow` spec 仍保留 `workflow_factory`；`react_loop` 节点不再自己调用 `create_agent`，而是通过 `FrameworkAgent` 装配，保留节点边界、工具子集、prompt、max_steps、stop_when 和 trace 归属。
+
+`robot_vacuum/v4.json` 的 `stop_when=answer_has_citation` 属于非默认停止语义，因此按此契约继续走 `workflow`，不再投影为 native Agent。`FrameworkAgent` 仍是唯一装配点，`robot_vacuum_support/execution.py` 的业务执行抽取保持不变。
 
 ## 2. 唯一装配点与 effective policy
 
@@ -72,7 +74,7 @@
 - worker 通过 `AH_SESSION_ID` 获得会话身份；根 thread 为 `session-<id>`，同一会话的 stop/reopen 仍复用同一 checkpoint namespace。
 - 普通 Agent 只在 checkpoint 为空时用最近 12 条 transcript 做一次 seed；checkpoint 已有消息时不再把 history 重复拼进 prompt。checkpoint 关闭时仍每轮使用最近 12 条。
 - 真实错误会触发 checkpoint namespace 轮换（避免半写 checkpoint 污染下一轮），下一轮以 transcript 最近 12 条恢复；这是明确的错误恢复路径，不是静默成功。
-- workflow 子 Agent 使用显式 namespace：`workflow:<name>/node:<node-id>`，带 `parent_trace_id`；trace 事件写 `namespace` / `parent_trace_id`。
+- workflow 根 thread 为 `workflow-<session-id>`，同一会话的 stop/reopen 复用同一 thread；workflow 子 Agent 使用显式 namespace：`workflow:<name>/node:<node-id>`，带 `parent_trace_id`；trace 事件写 `namespace` / `parent_trace_id`。
 - 预算以一次真实 model/tool request 计一次；子预算 `parent` 指向父预算，并用同一 `run_id` 去重，不重复计数。
 - 部分中断、审批和 stream 行为保持：`interrupt` 仍通过 SSE `interrupt` 输出；审批恢复仍只恢复同一 live worker 的 pending runtime；typed failure 仍以 SSE `error` / `run_end error` 传播。
 
@@ -100,35 +102,37 @@
 
 - `FrameworkAgent(scenario)` 仍兼容位置参数；`invoke()` / `execute_stream()` 保留。
 - workflow 子 Agent 节点：checkpoint 关闭，thread 使用显式节点 namespace（`workflow:<name>/node:<id>`），带 parent trace。
-- **差异（只报告，不在收尾时大改）**：P2 约定“exact single loop 且默认停止语义”才走 native agent，复杂/非默认 `stop_when` 继续 workflow；当前实现把任意 exact single `react_loop` 都判为 native agent，并把 `answer_has_citation` 作为 native 的回答后校验。因此 `robot_vacuum/v4.json`（`stop_when=answer_has_citation`）当前走 native agent，而不是 P2 新约定的 workflow。该差异需 P2/后续会话对齐；本次没有为了对齐再改业务 spec 或扩大重构。
+- **native 识别已与 P2 契约对齐**：只有 exact single `react_loop` + `START/END` 直连 + 无额外/条件边 + 默认 `stop_when=no_tool_calls` 才走 native agent；`answer_has_citation` 等非默认停止语义继续 `workflow`。
+- `robot_vacuum/v4.json` 保持原内容（`stop_when=answer_has_citation`），因此现在走 `workflow`；节点仍由 `FrameworkAgent` 统一装配，业务执行抽取仍在 `runtime/robot_vacuum_support/execution.py`。
+- 显式 `mode=agent` 与上述结构冲突时由 `agent_contract_issues` 报错，不静默丢节点。该差异已在本次改动和最终 artifact 整产品验证中消除。
 
 ## 6. 实测
 
-完整整产品入口（非组件）使用已构建的完整 artifact：
+完整整产品入口（非组件）使用最终构建的完整 artifact：
 
-- 已验证 artifact：`robot_vacuum-v4-93d9afcde5`
+- 已验证 artifact：`robot_vacuum-v4-532c735eec`（`run.py --check` ok）
 - 入口：`serve.py --instance-config`，正常 HTTP/SSE，`http://127.0.0.1:18082`
-- 隔离：`outputs/runtime-refactor-v1/storage`，独立实例配置；旧 18080 未动
-- 模型：复用已授权 `my_agent_harness/.env` 的 `DEEPSEEK_API_KEY`，值未打印；实例另生成隔离 access/admin token
-- 冻结：`eval/development-next/three-mainlines-v1` 的 12 cases / 18 turns 原样运行，并发 2，预期未改
+- 隔离：`outputs/runtime-refactor-v2/storage`，独立实例配置；18080 未启动、未触碰
+- 模型：复用既有有效 `outputs/runtime-refactor-v1/instance.env` 的 `DEEPSEEK_API_KEY`，值未打印；实例另生成隔离 access/admin token
+- 冻结：`eval/development-next/three-mainlines-v1` 的 12 cases / 18 turns 原样运行，并发 2，case/suite hash 与预期未改
 
-结果（详见 `outputs/runtime-refactor-v1/report.json`，不入库）：
+结果（详见 `outputs/runtime-refactor-v2/report.json` 与 `closeout.json`，不入库）：
 
-- 12 cases / 18 turns 全部执行：10 个 `passed_structural`，2 个 `failed_structural`；失败点都是第二轮 `retrieval_attempted=false` 的既存发现（`ml-recharge-normal-closure`、`ml-suction-correction-third-party`），预期未改。
-- checkpoint/restart：2 个额外用户 turn，中间真实停止并重启；`thread_id` 前后同为 `session-<id>`，transcript 为 `user/assistant/user/assistant`，第二问保留“我叫小明”的历史，无重复用户消息。
-- typed error：approval 失效返回 HTTP 410 `approval_gone`；另一个隔离整产品实例用无效 provider key 触发 SSE `error`、`last_status=error`、trace `run_end status=error`。该探针是错误路径检查，不计入 QA 成功率。
+- 12 cases / 18 turns 全部执行：11 个 `passed_structural`，1 个 `failed_structural`。失败点是 `ml-recharge-normal-closure` 第二轮 `retrieval_attempted=false`；冻结预期未改。此前同样失败过的 `ml-suction-correction-third-party` 本轮结构通过（第二轮 retrieval attempted=true）；这是单次实际结果，不改写为缺陷已修复。
+- checkpoint/restart：2 个额外用户 turn，中间真实停止并重启；`thread_id` 前后同为 `workflow-s-2909ea1266664004`，transcript 为 `user/assistant/user/assistant`，第二问保留“我叫小明”的历史，无重复用户消息。
+- typed error：approval 失效返回 HTTP 410 `approval_gone`；另一个隔离整产品实例用无效 provider key 触发 SSE `error`，`code=model_auth_failed`、`requires_configuration=true`、`last_status=error`、trace `run_end status=error`。该探针是错误路径检查，不计入 QA 成功率。
 - handoff：真实 HTTP 用户端/管理端生命周期通过（申请、排队、接手、回复幂等、结案）。
+- 全量 pytest：340 passed / 8 failed / 26 subtests passed。失败集中在 `tests/test_eval_selection.py`（2）与 `tests/test_eval_v1.py`（6），涉及 dataset README quote / state-runner 等检查；本轮没有对 base 版本做同口径复跑，因此只记为未证既存/未解决，不武断归因于本次 runtime 改动。上一轮记录的 manual-review UI selection flake 本轮通过，未复现。
 - Docker：已有 engine 不可用且按约束未启动，所以没有镜像缓存构建、compose 或独立 Docker volume 证据。
 
-后续为修正 worker 层 typed error 归一化又构建了 `robot_vacuum-v4-d30692614a`；该 artifact 的 `run.py --check` 通过，但**完整整产品复跑在收尾时被中断**，不能宣称已整产品验证。已完整验证的是 `93d9afcde5`；两者差异仅 worker 异常分类，主路径 12-case/checkpoint 证据不据此改写。
+`robot_vacuum-v4-d30692614a` 的中断复跑记录不再作为最终证据；最终结论只绑定上述 `532c735eec` 的本次运行。
 
 ## 7. 缺项与边界
 
 - 本机已有 Docker engine 不可用；按任务约束没有启动 Docker Desktop、daemon 或 GUI，因此没有新镜像缓存构建，也没有 Docker compose 运行。已用完整 artifact 的正常 HTTP/SSE 入口在独立端口/存储上做整产品验证；Docker 镜像/volume 证据仍缺。
-- 最新 artifact `d30692614a` 的完整整产品复跑未完成；已验证证据绑定 `93d9afcde5`。
 - 12 cases 是开发集，不是 holdout，不是成功率；语义判断仍需人工，不把结构通过写成语义正确。
-- `secondturn` 的 retrieval attempted 发现按原 suite 保留，不改预期。
-- 全量 pytest 有既存 eval dataset README quote drift / manual-review UI 选择 flake；它们不在本次修改路径，需与本次 runtime 变更分开报告。
+- 冻结 suite/cases 预期未改；本轮 1 条 `retrieval_attempted` 失败原样保留。此前同样失败、本轮通过的另一条只作为单次实测记录，不写成缺陷修复。
+- 全量 pytest 8 项失败没有做 base 对比，不能证明“既存”，按未证既存/未解决保留；本次不据此归因。
 - 未做 40–60 集扩展、真实用户量、SLA、线上部署；没有外部队列工单。
 
 ## 8. 复现
@@ -141,7 +145,7 @@ python -m pytest tests/test_runtime_refactor.py -q
 python -c "import sys; sys.path.insert(0, 'runtime'); from modules.artifacts.project import build_project; import json; print(json.dumps(build_project('.', r'..\robot-vacuum-support-built', include_assets=True), ensure_ascii=False))"
 
 # 冻结 12 case / 18 turn + 2 checkpoint turns + 错误路径 + 人工接管
-python scripts/run_runtime_refactor_acceptance.py --artifact <artifact> --env-file <authorized env>
+python scripts/run_runtime_refactor_acceptance.py --artifact <artifact> --env-file outputs/runtime-refactor-v1/instance.env --out-dir outputs/runtime-refactor-v2
 ```
 
-证据目录 `outputs/runtime-refactor-v1/` 不提交。
+证据目录 `outputs/runtime-refactor-v2/` 不提交。

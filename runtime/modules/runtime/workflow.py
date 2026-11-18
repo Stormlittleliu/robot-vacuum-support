@@ -49,11 +49,12 @@ class WorkflowRuntime:
             available = ", ".join(self.list_workflows()) or "（无）"
             raise FileNotFoundError(f"工作流不存在：{name}（可用：{available}）")
         self.run_budget = RunBudget(token_limit(self.scenario), parent=current_budget())
-        # Root thread is stable for the session lifetime; the run id only
-        # separates independent workflow runs in trace/checkpoint history.
+        # Root thread is stable for the session lifetime; independent runs are
+        # separated by trace/run id instead of a fresh thread id, so a
+        # stop/reopen keeps the same checkpoint namespace for workflow scenes.
         session_key = str(os.environ.get("AH_SESSION_ID") or "").strip()
         thread_id = (
-            f"workflow-{session_key}-{uuid.uuid4().hex}"
+            f"workflow-{session_key}"
             if session_key
             else f"workflow-{uuid.uuid4().hex}"
         )
