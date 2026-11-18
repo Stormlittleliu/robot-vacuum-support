@@ -11,6 +11,11 @@
 - `scripts/docker_deploy.py` 只做必要范围的预检、隔离 project 启停和 HTTP/SSE smoke；仓库内没有 `Docker Desktop`、`open -a Docker`、`Start-Process Docker` 之类的启动逻辑。
 - 若目标环境没有可用的 headless Engine，正确做法是报告阻塞并等待环境提供，而不是在本机安装或启动新的 daemon。
 
+Windows 上已有运行中的 WSL2 Engine 时，不要启用 Docker Desktop 或修改全局
+`PATH`/context；用 `scripts/headless_docker.py` 固定发行版和 compose project，
+再用 `deploy/compose.headless.yml` 强制显式镜像、卷名、Linux 资产根和端口。完整
+路径、命名隔离和已迁/未迁边界见 [headless-migration.md](headless-migration.md)。
+
 ## 1. 交付物
 
 | 文件 | 作用 |
@@ -20,7 +25,9 @@
 | `.dockerignore` | 排除知识/模型/索引、密钥、outputs、会话、缓存、测试与本地数据 |
 | `docker/entrypoint.py` | 启动时用现有 `build_project` 在 `/data` 构建 artifact，写实例配置后 `exec` `serve.py` |
 | `docker/healthcheck.py` | 独立 liveness / readiness 探针 |
-| `docker-compose.yml` | `backend`（仅内部网络）+ `frontend`（nginx，唯一公开端口） |
+| `docker-compose.yml` | `backend`（仅内部网络）+ `frontend`（nginx，唯一公开端口）；通用云默认值 |
+| `deploy/compose.headless.yml` | 无头/独立 project 的最小 override：显式镜像、卷名、Linux 资产根、端口与实例 ID，缺值 fail-closed |
+| `scripts/headless_docker.py` | 固定 WSL 发行版与 compose project 的无头包装；不修改全局环境 |
 | `deploy/nginx.conf` | 独立静态前端、`/api` 反代、SSE 禁 buffer、长超时 |
 | `product_ui/config.js` | 公共 API 地址配置；默认同源 `/api` |
 | `.env.docker.example` | 环境模板，只有占位值；`RVS_ADMIN_TOKEN` / `RVS_ACCESS_TOKEN` 必填 |

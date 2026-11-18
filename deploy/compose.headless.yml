@@ -1,0 +1,33 @@
+# Minimal headless deployment override.
+#
+# Layered on top of the portable docker-compose.yml so the public cloud file
+# keeps its generic defaults. Every host-specific value is required from the
+# caller's env file and fails closed when missing:
+#
+#   RVS_BACKEND_IMAGE      explicit image tag, e.g. rvs-p1/backend:<short>
+#   RVS_DATA_VOLUME        explicit persistent volume name, e.g. rvs-p1_rvs-data
+#   RVS_ASSETS_HOST_ROOT   Linux absolute asset root (never a Windows path)
+#   PUBLIC_PORT            explicit host port
+#   RVS_INSTANCE_ID        instance identity for this deployment
+#
+# Run it through scripts/headless_docker.py, which pins the WSL distro and the
+# compose project instead of changing any global Docker context/PATH setting.
+services:
+  backend:
+    image: ${RVS_BACKEND_IMAGE:?RVS_BACKEND_IMAGE must be an explicit image tag}
+    environment:
+      RVS_INSTANCE_ID: "${RVS_INSTANCE_ID:?RVS_INSTANCE_ID is required}"
+    volumes:
+      - "${RVS_ASSETS_HOST_ROOT:?RVS_ASSETS_HOST_ROOT must be a Linux absolute path}/knowledge:/assets/knowledge:ro"
+      - "${RVS_ASSETS_HOST_ROOT:?}/models/bge-small-zh-v1.5:/assets/models/bge-small-zh-v1.5:ro"
+      - "${RVS_ASSETS_HOST_ROOT:?}/rag_index:/assets/rag_index:ro"
+      - rvs-data:/data
+
+  frontend:
+    ports:
+      - "${PUBLIC_PORT:?PUBLIC_PORT is required}:8080"
+
+volumes:
+  rvs-data:
+    # Pin the exact name instead of relying on the compose project prefix.
+    name: ${RVS_DATA_VOLUME:?RVS_DATA_VOLUME must be an explicit volume name}

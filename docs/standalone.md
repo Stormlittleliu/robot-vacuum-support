@@ -41,6 +41,7 @@
 4. [robot_vacuum/v1.json](../robot_vacuum/v1.json)：权威场景 spec；`v4.json` 为当前迭代版本。
 5. [eval/README.md](../eval/README.md)：评测口径、数据契约和命令。
 6. [docs/manual-review.md](manual-review.md)：人工审核边界。
+7. [docs/headless-migration.md](headless-migration.md)：Windows/WSL2 无头 Engine 的路径、命名隔离与已迁/未迁边界。
 
 ## 3. 本地恢复资产
 
