@@ -92,19 +92,27 @@
 ## 5. API / 行为差异
 
 - HTTP 路由和 SSE 事件名不变：`answer` / `answer_delta` / `interrupt` / `handoff` / `error` / `done`。`/api` 与 `/api/v1` 双路由不变。
-- 普通 Agent 不再生成 workflow wrapper trace / node 事件；`/api/instance` 的 workflow 信息仍为 `agent`。
-- `effective_policies` 新增在 direct-agent 的 worker result 中，并可由 `FrameworkAgent.last_effective_policies` / `pipeline.effective_policies()` 读取；未改变旧字段。
+- 普通 Agent 不再生成 workflow wrapper trace / node 事件；`/api/instance` 的 workflow 信息仍为 `agent`。这是客服侧 `mode=agent` 扩展的行为，不是 P2 共享字段。
+- `effective_policies` 新增在 direct-agent 的 worker result 中，并可由 `FrameworkAgent.last_effective_policies` / `pipeline.effective_policies()` 读取；未改变旧字段。其值须由真实装配派生，且该字段本身是 P1 扩展，P2 / 编辑器不识别。
 - workflow 节点使用 `FrameworkAgent` 后，`react_loop` 的流式输出改为 `stream_mode="values"` + 去重，输出文本语义保持；节点仍有独立 trace namespace。
 - 错误分类保持：provider/model 错误仍映射到 typed `code`；approval 失效仍是 HTTP 410 `approval_gone`；failed turn 的 `last_status=error`。
 - `Server` 的 generic fallback（没有 `robot_vacuum_support` 的 artifact）仍可用，只是没有业务状态/证据 review。
 
-### 5.1 P2 最终 API 对齐核对
+### 5.1 P2 共享兼容差异核对（复核更正）
 
-- `FrameworkAgent(scenario)` 仍兼容位置参数；`invoke()` / `execute_stream()` 保留。
-- workflow 子 Agent 节点：checkpoint 关闭，thread 使用显式节点 namespace（`workflow:<name>/node:<id>`），带 parent trace。
-- **native 识别已与 P2 契约对齐**：只有 exact single `react_loop` + `START/END` 直连 + 无额外/条件边 + 默认 `stop_when=no_tool_calls` 才走 native agent；`answer_has_citation` 等非默认停止语义继续 `workflow`。
-- `robot_vacuum/v4.json` 保持原内容（`stop_when=answer_has_citation`），因此现在走 `workflow`；节点仍由 `FrameworkAgent` 统一装配，业务执行抽取仍在 `runtime/robot_vacuum_support/execution.py`。
-- 显式 `mode=agent` 与上述结构冲突时由 `agent_contract_issues` 报错，不静默丢节点。该差异已在本次改动和最终 artifact 整产品验证中消除。
+结论：**只到最小调用兼容，不是 API / 字段完全一致**。此前“`FrameworkAgent(scenario)` 兼容、`invoke()` / `execute_stream()` 保留”被表述成“API 一致”，现更正为下述有限兼容。本轮只更新本记录，未改 runtime、未跑产品。
+
+1. **共享最小 API 与客服扩展**：P2 共享最小 API 只有 `FrameworkAgent(scenario)`、`invoke()`、`execute_stream()`。客服侧 `FrameworkAgent.__init__` 还接受可选 `execution` / `tools` / `system_prompt` / `middleware` / `checkpointer` / `response_format` / `stop_when` / `node_overrides` / `trace_namespace` / `parent_trace_id`，这些是 P1 内部扩展，编辑器 / P2 没有对应字段。因此只保证“用 `scenario` 构造 + 调 `invoke` / `execute_stream`”这条最小路径可用；传扩展 kwargs 或依赖其语义不属于对 P2 的兼容承诺。
+2. **`ExecutionSpec` / `Scenario.mode` 等字段**：客服 `ExecutionSpec` / `Scenario.mode` 默认 `agent`，以及 `stop_when`、`effective_policies`，都是 P1 扩展；编辑器 / P2 无这些字段，分发仍按 `workflow_factory` 走 factory，不读 `mode`。因此不能称为字段一致，也不能假设 P2 会识别 `mode`。
+3. **`max_steps=0` 零保留语义（实际存在，未统一）**：客服 `runtime/modules/scenario_format/spec.py:296` 在显式 `max_steps <= 0` 时把 `tool_call_limit` 置 `None`，清掉 `harness.tool_call_limit`；`spec_nodes.py:1260` 同时构造 `enabled=false` 的 `limit` node override（`reason: react_loop.max_steps=0 disables the tool-call limit`）。这与 P2 “零保留场景限制”的冲突是真实执行路径，不是文档描述。
+4. **effective policy 与 mode 来源**：`effective_policies` 必须由真实装配（实际 `ExecutionSpec` / override / 默认表）派生，不能用推断值或文档表代替；`mode` 目前有 spec 显式值、结构推断、节点构造（如 `workflow_node`）等多处来源，待统一。不能宣称“字段完全一致”。
+
+未解决兼容项与下一步：
+
+- 上述 1–4 保留为未解决 / 待统一兼容项，本轮不改语义、不改 runtime。
+- 需在整产品入口（真实 artifact + HTTP/SSE）复验后才判断兼容范围；组件级最小调用通过不等于整产品兼容。
+- `max_steps=0`、`stop_when` 停止条件与预算 / 限制语义的取舍需产品层决策；本轮不擅自改动停止 / 预算语义，也不改 runtime 代码。
+- 客服内部仍有 workflow 子 Agent 节点差异：checkpoint 关闭，thread 使用 `workflow:<name>/node:<id>` namespace 并带 parent trace；这是客服侧实现，不属于 P2 共享契约。
 
 ## 6. 实测
 
