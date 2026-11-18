@@ -8,6 +8,7 @@ instead of rebuilding an approval from current config.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
@@ -16,6 +17,7 @@ from core.observability import latency
 from core.observability.turn_usage import TurnUsage, turn_usage_scope
 from core.tools.rag.evidence import begin_collection, end_collection
 from modules.runtime.framework import FrameworkAgent
+from modules.runtime.pipeline import effective_policies
 from modules.runtime.workflow import WorkflowRuntime
 
 
@@ -48,6 +50,40 @@ def reset() -> None:
     _direct_thread_id = None
     _direct_history_primed = False
     _pending.clear()
+
+
+def _session_thread_id() -> str:
+    """Stable root thread for this session process.
+
+    The session id is supplied by the worker env, so a stop/reopen that keeps
+    the same session data reuses the same checkpoint namespace instead of
+    inventing a new random thread.
+    """
+    session = str(os.environ.get("AH_SESSION_ID") or "").strip()
+    return f"session-{session}" if session else f"instance-{uuid.uuid4().hex}"
+
+
+def _has_checkpoint(agent: FrameworkAgent, thread_id: str) -> bool:
+    try:
+        state = agent.get_state(thread_id)
+    except Exception:  # noqa: BLE001 - a missing checkpoint is simply not primed
+        return False
+    values = getattr(state, "values", None)
+    if not isinstance(values, dict):
+        return False
+    return bool(values.get("messages"))
+
+
+def _history_mode(*, checkpoint: bool, has_checkpoint: bool) -> bool:
+    """Whether this turn must prepend the bounded transcript.
+
+    * checkpoint disabled: always send the bounded recent transcript;
+    * checkpoint enabled and already populated: checkpoint is the source of
+      truth, do not duplicate history into the prompt;
+    * checkpoint enabled but empty (first turn / recreated worker): seed once
+      with the bounded transcript, then rely on the checkpoint.
+    """
+    return not checkpoint or not has_checkpoint
 
 
 def _prompt(body: dict, include_history: bool = True) -> str:
@@ -210,15 +246,19 @@ def _run_impl(name: str, body: dict, event_sink=None, token_sink=None) -> dict:
         if _direct_agent is None:
             with latency.span("worker.agent_build", scenario=name):
                 _direct_agent = FrameworkAgent(scenario)
-        # A fresh UUID per worker/reset; stop/reopen keeps the worker alive but a
-        # crashed worker naturally starts a new thread.
+        # A stable root thread per session worker.  The checkpoint (when
+        # enabled) is the source of truth after the first primed turn; the
+        # bounded transcript is only sent when the checkpoint is empty, so the
+        # same history is never appended twice.
         if _direct_thread_id is None:
-            _direct_thread_id = f"instance-{uuid.uuid4().hex}"
+            _direct_thread_id = _session_thread_id()
             _direct_history_primed = False
         checkpoint = bool(getattr(execution, "checkpoint", False))
-        turn_prompt = _prompt(
-            body, include_history=not checkpoint or not _direct_history_primed
+        has_checkpoint = _has_checkpoint(_direct_agent, _direct_thread_id) if checkpoint else False
+        include_history = _history_mode(
+            checkpoint=checkpoint, has_checkpoint=has_checkpoint
         )
+        turn_prompt = _prompt(body, include_history=include_history)
         thread_id = _direct_thread_id
         answer = ""
         first_delta = False
@@ -236,7 +276,9 @@ def _run_impl(name: str, body: dict, event_sink=None, token_sink=None) -> dict:
                     if token_sink is not None:
                         token_sink(delta)
         except Exception:
-            # A half-written checkpoint must not poison the next turn.
+            # A half-written checkpoint must not poison the next turn; rotate
+            # the checkpoint namespace but keep the transcript as the bounded
+            # recovery source.
             _direct_thread_id = None
             _direct_history_primed = False
             raise
@@ -247,6 +289,8 @@ def _run_impl(name: str, body: dict, event_sink=None, token_sink=None) -> dict:
             "answer": answer,
             "thread_id": thread_id,
             "interrupt": _direct_agent.last_interrupt if interrupted else None,
+            "stop_error": getattr(_direct_agent, "last_stop_error", None),
+            "effective_policies": getattr(_direct_agent, "last_effective_policies", None),
             "usage": _usage(
                 getattr(_direct_agent, "last_budget", None),
                 getattr(_direct_agent, "last_usage_summary", None),
@@ -272,6 +316,7 @@ def _run_impl(name: str, body: dict, event_sink=None, token_sink=None) -> dict:
         "answer": _answer(result),
         "thread_id": runtime.thread_id,
         "interrupt": runtime.last_interrupt if runtime.last_interrupt is not None else None,
+        "effective_policies": effective_policies(scenario, execution=execution),
         "usage": _usage(runtime.run_budget, runtime.last_usage_summary),
         **_observability(runtime.last_trace_id, runtime.last_node_events),
     }

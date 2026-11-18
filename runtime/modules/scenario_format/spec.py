@@ -29,6 +29,7 @@ from core.paths import SPEC_ROOT as _SPEC_ROOT
 from core.prompts.blocks import PromptBook, validate_book
 from core.prompts.assemble import context_from_scenario, get_assembled
 from modules.scenario_format.edges import END, START
+from modules.scenario_format.modes import agent_contract_issues, infer_scene_mode
 from modules.scenario_format.spec_check import (
     Issue,
     SPEC_VERSION,
@@ -162,6 +163,8 @@ class ScenarioSpec(BaseModel):
     description: str = ""
     # 场景类型：agent / router（router 靠 planning 规则分流，界面上多一个路由配置面板）
     kind: str = "agent"
+    # 结构模式：agent / workflow。新 spec 建议显式声明；旧 spec 留空按结构推断。
+    mode: str | None = None
     tools: list[str] = Field(default_factory=list)
     system_prompt: str = ""
     # 分块提示词：给了 blocks 就按块拼接（覆盖 system_prompt）；否则用 system_prompt 原文。
@@ -226,6 +229,7 @@ def build_workflows(spec: ScenarioSpec, scenario: Any) -> dict[str, Any]:
         spec,
         tools=list(getattr(scenario, "tools", None) or []),
         model=model,
+        base_scenario=scenario,
     )
     return compiled.graphs
 
@@ -256,23 +260,60 @@ def build_from_spec(
         raise SpecError(errors)
 
     by_name = {getattr(tool, "name", ""): tool for tool in tools}
-    missing = [name for name in spec.tools if name not in by_name]
+
+    harness = spec.harness
+    draft = spec.model_dump()
+    mode = infer_scene_mode(draft)
+    issues = agent_contract_issues(draft)
+    if issues:
+        raise SpecError(issues)
+    has_react_loop = any(
+        node.fn == "react_loop"
+        for workflow in spec.workflows.values()
+        for node in workflow.nodes
+    )
+    agent_node = None
+    if mode == "agent":
+        # 普通 Agent scene 不建 wrapper graph：react_loop 的显式配置就是
+        # Agent 配置，直接映射到 Scenario / ExecutionSpec。
+        for workflow in spec.workflows.values():
+            for node in workflow.nodes:
+                if node.fn == "react_loop":
+                    agent_node = node
+                    break
+            if agent_node is not None:
+                break
+    if agent_node is not None:
+        node_tools = agent_node.args.get("tools")
+        selected_names = list(node_tools) if isinstance(node_tools, list) else list(spec.tools)
+        system_prompt = str(agent_node.args.get("prompt") or spec.system_prompt)
+        stop_when = str(agent_node.args.get("stop_when") or "no_tool_calls")
+        if "max_steps" in agent_node.args:
+            try:
+                max_steps = int(agent_node.args.get("max_steps") or 0)
+            except (TypeError, ValueError):
+                raise SpecError(["react_loop.args.max_steps 必须是整数"])
+            tool_call_limit = max_steps if max_steps > 0 else None
+        else:
+            tool_call_limit = harness.tool_call_limit
+    else:
+        selected_names = list(spec.tools)
+        system_prompt = spec.system_prompt
+        stop_when = "no_tool_calls"
+        # react_loop 自己持有 max_steps；外层再加一道 tool_call_limit 会把
+        # 复杂任务的预算截在更低的值上，且错误看起来像“循环坏了”。
+        tool_call_limit = None if has_react_loop else harness.tool_call_limit
+
+    missing = [name for name in selected_names if name not in by_name]
     if missing:
         raise SpecError([f"场景缺少工具：{', '.join(missing)}"])
-    # 允许没有工具：白板 / 结构化输出这类场景只有一个 agent 循环。
-    selected = [by_name[name] for name in spec.tools]
+    selected = [by_name[name] for name in selected_names]
 
     # 工具白名单确定后再校验一次：块里引用的 tool_list 必须真的可用。
     errors = validate_spec(spec, tool_names={tool.name for tool in selected})
     if errors:
         raise SpecError(errors)
 
-    harness = spec.harness
-    has_react_loop = any(
-        node.fn == "react_loop"
-        for workflow in spec.workflows.values()
-        for node in workflow.nodes
-    )
     options: dict[str, Any] = dict(defaults or {})
     # defaults 里属于执行面的键（model / middleware / checkpoint…）收进 ExecutionSpec；
     # 其余才是 Scenario 的结构 / harness 字段。
@@ -284,15 +325,14 @@ def build_from_spec(
     options.update({
         "name": spec.name,
         "description": spec.description,
-        "system_prompt": spec.system_prompt,
+        "system_prompt": system_prompt,
         "tools": selected,
         "kind": spec.kind,
+        "mode": mode,
         "cases_path": cases_path,
         "enable_todo": harness.enable_todo,
         "enable_summarization": harness.enable_summarization,
-        # react_loop 自己持有 max_steps；外层再加一道 tool_call_limit 会把
-        # 复杂任务的预算截在更低的值上，且错误看起来像“循环坏了”。
-        "tool_call_limit": None if has_react_loop else harness.tool_call_limit,
+        "tool_call_limit": tool_call_limit,
         "token_budget": harness.token_budget,
         "runtime": runtime,
     })
@@ -301,7 +341,9 @@ def build_from_spec(
         middleware=list(execution_overrides.pop("middleware", None) or []),
         response_format=execution_overrides.pop("response_format", response_format),
         workflow_factory=(
-            (lambda scenario: build_workflows(spec, scenario)) if spec.workflows else None
+            (lambda scenario: build_workflows(spec, scenario))
+            if mode == "workflow" and spec.workflows
+            else None
         ),
         checkpoint=bool(execution_overrides.pop("checkpoint", True)),
         checkpoint_backend=str(
@@ -313,6 +355,8 @@ def build_from_spec(
             if spec.policies is not None
             else execution_overrides.pop("policies", None)
         ),
+        mode=mode,
+        stop_when=stop_when,
     )
     scenario = Scenario(**options)
     # 分块提示词：块能引用 {tools} / {workflows}，所以要等 Scenario 建好再拼。

@@ -117,6 +117,7 @@ def _worker_env(config, session_root: Path) -> dict[str, str]:
         AH_MODEL_ROOT=str(config.model_root),
         AH_INSTANCE_ID=str(config.instance_id),
         AH_ARTIFACT_ID=str(config.artifact_id),
+        AH_SESSION_ID=str(session_root.name),
         PYTHONIOENCODING="utf-8",
         # Stop python-dotenv / core.llm.factory load_dotenv() from walking up
         # into a parent source checkout and merging its .env.
@@ -720,29 +721,33 @@ def main() -> int:
                 protocol.flush()
         except Exception as exc:  # noqa: BLE001 - one failed request must not kill the worker
             try:
-                from core.llm.errors import (
-                    failure_code,
-                    failure_requires_configuration,
-                    failure_retryable,
-                    safe_error_message,
-                )
+                from core.llm.errors import TurnFailure, as_turn_failure, safe_error_message
 
+                if exc.__class__.__name__ == "ResumeGone":
+                    failure = TurnFailure(
+                        "approval_gone",
+                        str(exc),
+                        retryable=False,
+                    )
+                else:
+                    # Classify once at the process boundary so a raw provider
+                    # ``code`` attribute (e.g. invalid_request_error) cannot
+                    # bypass the typed model_auth_failed / rate-limit / timeout
+                    # mapping used by SSE and run_end.
+                    failure = as_turn_failure(exc)
                 payload = {
-                    "error": safe_error_message(exc),
-                    "retryable": failure_retryable(exc),
-                    "requires_configuration": failure_requires_configuration(exc),
+                    "error": safe_error_message(failure),
+                    "retryable": failure.retryable,
+                    "requires_configuration": failure.requires_configuration,
+                    "code": failure.code,
                 }
-                code = getattr(exc, "code", None) or failure_code(exc)
-                http_status = getattr(exc, "http_status", None)
-                if http_status:
-                    payload["http_status"] = http_status
+                if failure.http_status:
+                    payload["http_status"] = failure.http_status
             except Exception:  # noqa: BLE001 - very old artifact
                 payload = {"error": str(exc)}
                 code = getattr(exc, "code", None)
-            if exc.__class__.__name__ == "ResumeGone":
-                code = "approval_gone"
-            if code:
-                payload["code"] = str(code)
+                if code:
+                    payload["code"] = str(code)
             protocol.write(json.dumps(payload, ensure_ascii=False) + "\n")
             protocol.flush()
     return 0

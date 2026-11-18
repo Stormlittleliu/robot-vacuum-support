@@ -52,11 +52,15 @@ class TraceCallbackHandler(BaseCallbackHandler):
         thread_id: str | None = None,
         budget: RunBudget | None = None,
         scenario: str | None = None,
+        namespace: str | None = None,
+        parent_trace_id: str | None = None,
     ):
         self.trace_id = trace_id
         self.thread_id = thread_id
         self.budget = budget
         self.scenario = scenario
+        self.namespace = namespace
+        self.parent_trace_id = parent_trace_id
         self.started_at = time.time()
         self.model_calls = 0
         self.tool_calls = 0
@@ -117,6 +121,8 @@ class TraceCallbackHandler(BaseCallbackHandler):
     def _write(self, event: str, **fields) -> None:
         row = redact_value({
             "trace_id": self.trace_id,
+            "parent_trace_id": self.parent_trace_id,
+            "namespace": self.namespace,
             "thread_id": self.thread_id,
             "scenario": self.scenario,
             "event": event,

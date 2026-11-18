@@ -1175,7 +1175,7 @@ def iterate(
 @register_node(
     "react_loop",
     label="ReAct 循环",
-    desc="复合块：内部是一个完整 ReAct 循环，对外只暴露参数",
+    desc="复合块：内部是一个完整 ReAct 循环，对外只暴露参数，内部复用 FrameworkAgent 装配",
     params=(
         ParamSpec("prompt", "str", default="", help="系统提示词；留空用场景提示词"),
         ParamSpec("tools", "tool_list", required=True, help="可用工具白名单"),
@@ -1186,6 +1186,12 @@ def iterate(
             default="no_tool_calls",
             choices=("no_tool_calls", "answer_has_citation"),
             help="结束条件",
+        ),
+        ParamSpec(
+            "enable_summarization",
+            "bool",
+            default=None,
+            help="节点级覆盖（仅真实 workflow 节点）：是否启用上下文压缩；不填继承场景 policy",
         ),
     ),
     inputs=(PortSpec("input", "text", required=True, help="用户问题"),),
@@ -1198,12 +1204,15 @@ def react_loop(
     tools: list[str] | None = None,
     max_steps: int = 0,
     stop_when: str = "no_tool_calls",
+    enable_summarization: bool | None = None,
+    _node_id: str | None = None,
     **_,
 ) -> dict[str, Any]:
-    """复合块：内部是一个完整的 ReAct 循环（create_agent），对外只暴露参数。
+    """复合块：内部是一个完整的 ReAct 循环，复用 FrameworkAgent 装配。
 
-    它是"原子块"——内部是 create_agent 而不是节点，所以不能展开成子图。
-    想手拼循环，需要条件边 + 工具节点，那是另一层能力。
+    它是"原子块"——内部不是图节点，所以不能展开成子图。节点级 tools /
+    prompt / max_steps / stop_when 是 Agent 配置；max_steps 和
+    enable_summarization 同时作为 node_override 进入 effective policy。
     """
     if scenario is None:
         return {"answer": "", "scratch": _merge_scratch(state, error="react_loop 缺少场景")}
@@ -1224,54 +1233,89 @@ def react_loop(
             "scratch": _merge_scratch(state, error=f"react_loop 引用了不存在的工具：{', '.join(missing)}"),
         }
     try:
-        from langchain.agents import create_agent
-        from langchain.agents.middleware import ToolCallLimitMiddleware
-    except ImportError as exc:  # pragma: no cover - 依赖缺失时才触发
-        return {"answer": "", "scratch": _merge_scratch(state, error=f"依赖缺失：{exc}")}
+        from modules.contracts.agent import ExecutionSpec
+        from modules.runtime.compiler import (
+            current_workflow_runtime,
+            emit_token,
+            has_token_sink,
+        )
+        from modules.runtime.framework import FrameworkAgent, check_stop_when
 
-    from core.observability.budget import current_budget
-    from modules.runtime.middleware.budget import TokenBudgetMiddleware
-    run_budget = current_budget()
-    agent_context = {"_run_budget": run_budget} if run_budget else {}
-    from modules.runtime.limits import engine_recursion_limit
-    engine_config = {"recursion_limit": engine_recursion_limit()}
-    try:
-        agent = create_agent(
-            model=scenario.model,
+        base_execution = (
+            scenario.resolve_execution()
+            if callable(getattr(scenario, "resolve_execution", None))
+            else ExecutionSpec(model=getattr(scenario, "model", None))
+        )
+        node_execution = ExecutionSpec(
+            model=getattr(base_execution, "model", None) or getattr(scenario, "model", None),
+            middleware=[],
+            response_format=getattr(base_execution, "response_format", None),
+            workflow_factory=None,
+            checkpoint=False,
+            checkpoint_backend="memory",
+            policies=list(getattr(base_execution, "policies", None) or []) or None,
+            mode="workflow_node",
+            stop_when=stop_when,
+        )
+        node_overrides: list[dict[str, Any]] = [
+            {
+                "name": "limit",
+                "enabled": bool(max_steps and int(max_steps) > 0),
+                "args": {"run_limit": int(max_steps)},
+                "reason": None if max_steps else "react_loop.max_steps=0 disables the tool-call limit",
+            }
+        ]
+        if enable_summarization is not None:
+            node_overrides.append(
+                {
+                    "name": "summarization",
+                    "enabled": bool(enable_summarization),
+                    "reason": None
+                    if enable_summarization
+                    else "react_loop.enable_summarization=false",
+                }
+            )
+        workflow = current_workflow_runtime() or {}
+        namespace = f"{workflow.get('namespace') or 'workflow:standalone'}/node:{_node_id or 'react_loop'}"
+        parent_thread = workflow.get("thread_id")
+        thread_id = (
+            f"{parent_thread}:node:{_node_id or 'react_loop'}"
+            if parent_thread
+            else f"node-{_node_id or 'react_loop'}"
+        )
+        node_agent = FrameworkAgent(
+            scenario,
+            execution=node_execution,
             tools=[available[name] for name in requested],
             system_prompt=prompt or getattr(scenario, "system_prompt", "") or "你是一个严谨的助手。",
-            middleware=([ToolCallLimitMiddleware(run_limit=max_steps, exit_behavior="end")] if max_steps else []) + ([TokenBudgetMiddleware()] if run_budget and run_budget.remaining is not None else []),
+            stop_when=stop_when,
+            node_overrides=node_overrides,
+            trace_namespace=namespace,
+            parent_trace_id=workflow.get("trace_id"),
         )
-        from modules.runtime.compiler import emit_token, has_token_sink
-
         pieces: list[str] = []
-        if has_token_sink():
+        for delta in node_agent.execute_stream(
+            str(state.get("input") or ""), thread_id=thread_id
+        ):
+            pieces.append(delta)
+            emit_token(delta)
+        answer_text = node_agent.last_answer or "".join(pieces)
+        if not answer_text:
+            # 兼容不产生 values chunk 的 provider；仍走同一个 FrameworkAgent，
+            # 不另建 create_agent，也不绕过统一装配。
             from langchain_core.messages import AIMessage
 
-            try:
-                for chunk, _metadata in agent.stream(
-                    {"messages": [{"role": "user", "content": str(state.get("input") or "")}]},
-                    stream_mode="messages",
-                    config=engine_config, context=agent_context,
-                ):
-                    if isinstance(chunk, AIMessage):
-                        text_chunk = _content(chunk)
-                        if text_chunk:
-                            pieces.append(text_chunk)
-                            emit_token(text_chunk)
-            except (NotImplementedError, AttributeError):
-                if pieces:
-                    raise
-                pieces = []
-        if pieces:
-            answer_text = "".join(pieces).strip()
-        else:
-            result = agent.invoke({
-                "messages": [{"role": "user", "content": str(state.get("input") or "")}]
-            }, config=engine_config, context=agent_context)
+            result = node_agent.invoke(
+                str(state.get("input") or ""), thread_id=thread_id
+            )
             messages = result.get("messages") or []
-            answer_text = _content(messages[-1]).strip() if messages else ""
-            emit_token(answer_text)
+            answer_text = ""
+            for message in reversed(messages):
+                if isinstance(message, AIMessage):
+                    answer_text = _content(message).strip()
+                    break
+            if answer_text and not has_token_sink():
+                emit_token(answer_text)
     except Exception as exc:  # noqa: BLE001
         # A provider/model failure must cross the node boundary as a typed
         # failure.  Swallowing it here produced the old HTTP-200 empty answer
@@ -1286,10 +1330,5 @@ def react_loop(
         from core.llm.errors import ModelOutputFailure
 
         raise ModelOutputFailure("model_empty_answer")
-    error = None
-    if stop_when == "answer_has_citation" and not re.search(CITATION_PATTERN, answer):
-        # Keep the useful answer and record the validation gap.  The product's
-        # citation contract is checked by the structural runner; a missing
-        # bracket is not a provider failure and must not be relabelled as 401.
-        error = "回答缺少 [来源] 引用"
+    error = check_stop_when(stop_when, answer)
     return {"answer": answer, "scratch": _merge_scratch(state, error=error)}

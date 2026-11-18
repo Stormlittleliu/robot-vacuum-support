@@ -29,6 +29,12 @@ class ExecutionSpec:
     checkpoint_backend: str = "memory"
     checkpoint_path: str = "data/runtime/agent_checkpoints.sqlite"
     policies: list[Any] | None = None
+    #: 场景模式：agent 直接执行 FrameworkAgent；workflow 才执行真实图。
+    mode: str = "agent"
+    #: 普通 Agent 的停止条件（来自 spec.react_loop.stop_when 或代码默认）。
+    stop_when: str = "no_tool_calls"
+    #: 装配后各策略的值 / 来源 / 默认值；由 pipeline 统一计算。
+    effective_policies: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -40,6 +46,8 @@ class Scenario:
     # 场景类型：agent（普通 Agent）/ router（总路由，靠 planning 规则分流）。
     # 只影响 UI 分组与"路由配置"面板，不影响运行时。
     kind: str = "agent"
+    # 结构模式（agent / workflow）。显式声明优先，旧 spec 由结构推断。
+    mode: str = "agent"
     context: dict[str, Any] = field(default_factory=dict)
     cases_path: Path | None = None
     # Harness 能力（可选）

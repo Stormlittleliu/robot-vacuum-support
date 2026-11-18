@@ -12,6 +12,7 @@
 - InMemorySaver / SqliteSaver：会话记忆与 checkpoint（s09）
 - TraceCallbackHandler：模型/工具/token/耗时写入本地 trace
 """
+import re
 import time
 import uuid
 from modules.runtime.limits import engine_recursion_limit, token_limit
@@ -21,9 +22,9 @@ from langchain_core.messages import AIMessage
 from langgraph.types import Command
 
 from modules.runtime.checkpoint import build_checkpointer
-from modules.contracts.agent import Scenario
+from modules.contracts.agent import ExecutionSpec, Scenario
 from modules.runtime.hooks import HookManager
-from modules.runtime.pipeline import build_pipeline
+from modules.runtime.pipeline import build_pipeline, effective_policies
 from core.observability.budget import (
     RunBudget,
     budget_scope,
@@ -33,6 +34,16 @@ from core.observability.budget import (
 from core.observability.decisions import root_tracer_scope
 from core.observability.tracer import TraceCallbackHandler
 from modules.contracts.tool import ToolSpec
+
+CITATION_PATTERN = r"\[[^\]]+\]"
+
+
+def check_stop_when(stop_when: str | None, answer: str) -> str | None:
+    """Return the validation gap for a stop condition, without failing the turn."""
+    if str(stop_when or "no_tool_calls") == "answer_has_citation":
+        if not re.search(CITATION_PATTERN, str(answer or "")):
+            return "回答缺少 [来源] 引用"
+    return None
 
 
 def normalize_tools(tools) -> list:
@@ -52,50 +63,108 @@ def normalize_tools(tools) -> list:
 
 
 class FrameworkAgent:
-    """通用的 ReAct Agent 运行时。
+    """通用的 ReAct Agent 运行时，也是唯一的 ``create_agent`` 装配点。
 
-    业务差异全部由 Scenario 提供；Harness 能力由本层统一装配。
+    业务差异全部由 Scenario 提供；Harness 能力由本层统一装配。Workflow 的
+    ``react_loop`` 节点同样通过本类装配，只是传入节点级 tools / prompt /
+    limit 覆盖和显式 trace namespace，不再自己调用 ``create_agent``。
     """
 
-    def __init__(self, scenario: Scenario):
+    def __init__(
+        self,
+        scenario: Scenario,
+        *,
+        execution: ExecutionSpec | None = None,
+        tools: list | None = None,
+        system_prompt: str | None = None,
+        middleware: list | None = None,
+        checkpointer: object | None = None,
+        response_format: object | None = None,
+        stop_when: str | None = None,
+        node_overrides: list | None = None,
+        trace_namespace: str | None = None,
+        parent_trace_id: str | None = None,
+    ):
         self.scenario = scenario
         self.last_thread_id = None
         self.last_trace_id = None
         self.last_interrupt = None
         self.last_usage_summary = None
+        self.last_effective_policies: list[dict] = []
+        self.trace_namespace = trace_namespace
+        self.parent_trace_id = parent_trace_id
         self._pending_budgets = {}
         runtime = getattr(scenario, "runtime", None)
         self.hook_manager = HookManager(getattr(runtime, "hooks", None))
         # 活对象从 execution 取；旧场景没有 execution 时由 resolve_execution 回退。
-        execution = scenario.resolve_execution()
-        self.execution = execution
+        resolve = getattr(scenario, "resolve_execution", None)
+        self.execution = execution or (
+            resolve() if callable(resolve) else ExecutionSpec(model=getattr(scenario, "model", None))
+        )
+        self.stop_when = str(
+            stop_when
+            if stop_when is not None
+            else getattr(self.execution, "stop_when", None) or "no_tool_calls"
+        )
 
-        # 装配逻辑统一在 modules.runtime.pipeline：slot 决定顺序，spec 的 policies 只做覆盖。
-        self.middleware = build_pipeline(
+        # 装配逻辑统一在 modules.runtime.pipeline：slot 决定顺序，spec 的 policies
+        # 只做场景级覆盖；node_overrides 只允许真实 workflow 节点传入。
+        self.middleware = middleware if middleware is not None else build_pipeline(
             scenario,
             self.hook_manager,
-            execution.policies,
-            execution=execution,
+            self.execution.policies,
+            execution=self.execution,
+            node_overrides=node_overrides,
         )
-        self.checkpointer = (
-            build_checkpointer(execution.checkpoint_backend, execution.checkpoint_path)
-            if execution.checkpoint else None
+        self.effective_policies = effective_policies(
+            scenario,
+            self.hook_manager,
+            self.execution,
+            node_overrides=node_overrides,
+        )
+        self.last_effective_policies = list(self.effective_policies)
+        if checkpointer is not None:
+            self.checkpointer = checkpointer
+        else:
+            self.checkpointer = (
+                build_checkpointer(self.execution.checkpoint_backend, self.execution.checkpoint_path)
+                if self.execution.checkpoint
+                else None
+            )
+        self.tools = normalize_tools(
+            tools if tools is not None else getattr(scenario, "tools", None)
+        )
+        self.system_prompt = (
+            system_prompt
+            if system_prompt is not None
+            else getattr(scenario, "system_prompt", "")
         )
         self.agent = create_agent(
-            model=execution.model,
-            system_prompt=scenario.system_prompt,
-            tools=normalize_tools(scenario.tools),
+            model=self.execution.model or getattr(scenario, "model", None),
+            system_prompt=self.system_prompt,
+            tools=self.tools,
             middleware=self.middleware,
             checkpointer=self.checkpointer,
-            response_format=execution.response_format,
+            response_format=response_format
+            if response_format is not None
+            else self.execution.response_format,
         )
 
     @staticmethod
-    def _config(thread_id: str, tracer: TraceCallbackHandler | None = None) -> dict:
+    def _config(
+        thread_id: str,
+        tracer: TraceCallbackHandler | None = None,
+        namespace: str | None = None,
+    ) -> dict:
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": engine_recursion_limit()}
         if tracer is not None:
             config["callbacks"] = [tracer]
-            config["metadata"] = {"trace_id": tracer.trace_id, "thread_id": thread_id}
+            config["metadata"] = {
+                "trace_id": tracer.trace_id,
+                "thread_id": thread_id,
+                "trace_namespace": namespace or getattr(tracer, "namespace", None),
+                "parent_trace_id": getattr(tracer, "parent_trace_id", None),
+            }
         return config
 
     def _start_trace(self, thread_id: str, budget: RunBudget | None = None) -> TraceCallbackHandler:
@@ -104,6 +173,8 @@ class FrameworkAgent:
             thread_id=thread_id,
             budget=budget,
             scenario=self.scenario.name,
+            namespace=self.trace_namespace,
+            parent_trace_id=self.parent_trace_id,
         )
         self.last_trace_id = tracer.trace_id
         return tracer
@@ -201,12 +272,19 @@ class FrameworkAgent:
     def execute_stream(self, query: str, thread_id: str = "default"):
         self.last_thread_id = thread_id
         self.last_interrupt = None
+        self.last_answer = ""
+        self.last_stop_error = None
         rewritten = self.hook_manager.trigger("UserPromptSubmit", query)
         if isinstance(rewritten, str) and rewritten.strip():
             query = rewritten
         budget = self._new_budget()
         self.last_budget = budget
         tracer = self._start_trace(thread_id, budget)
+        tracer.record_decision(
+            middleware="effective_policy",
+            decision="assembled",
+            policies=self.effective_policies,
+        )
         input_dict = {
             "messages": [
                 {"role": "user", "content": query},
@@ -214,12 +292,13 @@ class FrameworkAgent:
         }
         seen_message_ids: set[str] = set()
         last_messages: list = []
+        pieces: list[str] = []
 
         try:
             with root_tracer_scope(tracer), budget_scope(budget):
                 for chunk in self.agent.stream(
                     input_dict,
-                    config=self._config(thread_id, tracer),
+                    config=self._config(thread_id, tracer, self.trace_namespace),
                     stream_mode="values",
                     context=self._run_context(budget),
                 ):
@@ -252,8 +331,11 @@ class FrameworkAgent:
                             if isinstance(block, dict) and block.get("type") == "text"
                         )
                     if isinstance(content, str) and content.strip():
+                        pieces.append(content.strip())
                         yield content.strip() + "\n"
         finally:
+            self.last_answer = "\n".join(pieces).strip()
+            self.last_stop_error = check_stop_when(self.stop_when, self.last_answer)
             if self.last_interrupt:
                 self._pending_budgets[thread_id] = budget
             else:

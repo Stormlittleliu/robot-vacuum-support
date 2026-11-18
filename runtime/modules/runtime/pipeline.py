@@ -63,18 +63,31 @@ class PolicySpec:
     enabled: bool = True
     args: dict[str, Any] = field(default_factory=dict)
     reason: str | None = None
+    #: 该值来自哪一层：harness_default / scenario_policy / node_override。
+    source: str = "scenario_policy"
+    #: harness 默认是否启用；用于 effective policy 审计，不改变装配。
+    default: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PolicySpec":
+    def from_dict(cls, data: dict[str, Any], *, source: str = "scenario_policy") -> "PolicySpec":
         return cls(
             name=str(data.get("name") or ""),
             enabled=bool(data.get("enabled", True)),
             args=dict(data.get("args") or {}),
             reason=data.get("reason"),
+            source=str(data.get("source") or source),
+            default=bool(data.get("default", False)),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "enabled": self.enabled, "args": self.args, "reason": self.reason}
+        return {
+            "name": self.name,
+            "enabled": self.enabled,
+            "args": self.args,
+            "reason": self.reason,
+            "source": self.source,
+            "default": self.default,
+        }
 
 
 @dataclass(frozen=True)
@@ -202,47 +215,50 @@ def available_policies() -> list[str]:
     return policy_registry.names()
 
 
-def default_policies(
-    scenario: Any,
-    hook_manager: Any = None,
-    execution: Any = None,
+#: Harness 默认层。这是唯一默认值定义；场景字段与 spec.policies 只能覆盖它，
+#: 真实 workflow 节点只能在最上层覆盖。`default` 是审计用的 harness 默认值，
+#: 不随场景变化。
+_HARNESS_DEFAULTS: dict[str, dict[str, Any]] = {
+    "permission": {"enabled": True},
+    "planning": {"enabled": False},
+    "todo": {"enabled": False},
+    "summarization": {"enabled": False},
+    "pii": {"enabled": False},
+    "hitl": {"enabled": False},
+    "timeout": {"enabled": True},
+    "error": {"enabled": True},
+    "retry": {"enabled": True},
+    "limit": {"enabled": False},
+    "budget": {"enabled": False},
+    "fallback": {"enabled": False},
+    "model_retry": {"enabled": True},
+    "hooks": {"enabled": False},
+}
+
+
+def _harness_default_specs() -> list[PolicySpec]:
+    return [
+        PolicySpec(
+            name=name,
+            enabled=bool(config.get("enabled")),
+            args={},
+            source="harness_default",
+            default=bool(config.get("enabled")),
+        )
+        for name, config in _HARNESS_DEFAULTS.items()
+    ]
+
+
+def _apply_layer(
+    base: list[PolicySpec],
+    overrides: list[Any] | None,
+    *,
+    source: str,
 ) -> list[PolicySpec]:
-    """从 Scenario 字段推导默认策略，复刻重构前的装配顺序。
-
-    ``execution`` 提供时，模型相关的策略用它的 model（``Scenario.execution`` 优先），
-    这样规则/装配不必回读 ``Scenario.model``。
-    """
-    specs: list[PolicySpec] = [PolicySpec("permission")]
-    if scenario.planning_policy is not None:
-        specs.append(PolicySpec("planning"))
-    if scenario.enable_todo:
-        specs.append(PolicySpec("todo"))
-    if scenario.enable_summarization:
-        model = getattr(execution, "model", None) if execution is not None else None
-        specs.append(PolicySpec("summarization", args={"model": model} if model is not None else {}))
-    if scenario.pii_types:
-        specs.append(PolicySpec("pii", args={"types": list(scenario.pii_types)}))
-    if scenario.high_risk_tools:
-        specs.append(PolicySpec("hitl"))
-    specs.extend([PolicySpec("timeout"), PolicySpec("error"), PolicySpec("retry")])
-    if scenario.tool_call_limit:
-        specs.append(PolicySpec("limit", args={"run_limit": scenario.tool_call_limit}))
-    from core.observability.budget import current_budget
-    inherited = current_budget()
-    if scenario.token_budget or (inherited is not None and inherited.remaining is not None):
-        specs.append(PolicySpec("budget"))
-    if scenario.fallback_model is not None:
-        specs.append(PolicySpec("fallback"))
-    specs.append(PolicySpec("model_retry"))
-    if hook_manager is not None and hook_manager.has_hooks():
-        specs.append(PolicySpec("hooks", args={"manager": hook_manager}))
-    return specs
-
-
-def _merge(base: list[PolicySpec], overrides: list[Any] | None) -> list[PolicySpec]:
+    """按层覆盖；同一个 name 后写覆盖前写，args 浅合并。"""
     merged = {spec.name: spec for spec in base}
     for raw in overrides or []:
-        spec = raw if isinstance(raw, PolicySpec) else PolicySpec.from_dict(raw)
+        spec = raw if isinstance(raw, PolicySpec) else PolicySpec.from_dict(raw, source=source)
         if not spec.name:
             raise PipelineError(["policies 里有一项缺少 name"])
         if policy_registry.find(spec.name) is None:
@@ -250,20 +266,158 @@ def _merge(base: list[PolicySpec], overrides: list[Any] | None) -> list[PolicySp
                 f"未知策略：{spec.name}（可用：{', '.join(available_policies())}）"
             ])
         current = merged.get(spec.name)
+        if current is None:
+            raise PipelineError([f"未知策略：{spec.name}"])
         merged[spec.name] = PolicySpec(
             name=spec.name,
             enabled=spec.enabled,
-            args={**(current.args if current else {}), **spec.args},
+            args={**current.args, **spec.args},
             reason=spec.reason,
+            source=source,
+            default=current.default,
         )
-    return list(merged.values())
+    return [merged[name] for name in _HARNESS_DEFAULTS if name in merged]
+
+
+def _scenario_layer(
+    scenario: Any,
+    hook_manager: Any = None,
+    execution: Any = None,
+) -> list[PolicySpec]:
+    """场景字段 + spec.policies 的覆盖层。
+
+    普通 Agent 不再有节点覆盖；workflow 节点的显式覆盖由 ``node_overrides``
+    在更高一层应用。这里始终是 scenario_policy。
+    """
+    specs: list[PolicySpec] = []
+    if getattr(scenario, "planning_policy", None) is not None:
+        specs.append(PolicySpec("planning", enabled=True))
+    if getattr(scenario, "enable_todo", False):
+        specs.append(PolicySpec("todo", enabled=True))
+    if getattr(scenario, "enable_summarization", False):
+        model = getattr(execution, "model", None) if execution is not None else None
+        specs.append(
+            PolicySpec(
+                "summarization",
+                enabled=True,
+                args={"model": model} if model is not None else {},
+            )
+        )
+    pii_types = list(getattr(scenario, "pii_types", None) or [])
+    if pii_types:
+        specs.append(PolicySpec("pii", enabled=True, args={"types": pii_types}))
+    if getattr(scenario, "high_risk_tools", None):
+        specs.append(PolicySpec("hitl", enabled=True))
+    limit = getattr(scenario, "tool_call_limit", None)
+    if limit:
+        specs.append(PolicySpec("limit", enabled=True, args={"run_limit": limit}))
+    from core.observability.budget import current_budget
+
+    inherited = current_budget()
+    if getattr(scenario, "token_budget", None) or (
+        inherited is not None and inherited.remaining is not None
+    ):
+        specs.append(PolicySpec("budget", enabled=True))
+    if getattr(scenario, "fallback_model", None) is not None:
+        specs.append(PolicySpec("fallback", enabled=True))
+    if hook_manager is not None and hook_manager.has_hooks():
+        specs.append(PolicySpec("hooks", enabled=True, args={"manager": hook_manager}))
+    # spec.policies 是场景级显式覆盖，不是节点覆盖。
+    specs.extend(
+        PolicySpec.from_dict(raw, source="scenario_policy")
+        if not isinstance(raw, PolicySpec)
+        else PolicySpec(
+            name=raw.name,
+            enabled=raw.enabled,
+            args=dict(raw.args),
+            reason=raw.reason,
+            source="scenario_policy",
+            default=raw.default,
+        )
+        for raw in (getattr(execution, "policies", None) or [])
+    )
+    return specs
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    return f"<{type(value).__name__}>"
+
+
+def effective_policies(
+    scenario: Any,
+    hook_manager: Any = None,
+    execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
+) -> list[dict[str, Any]]:
+    """返回 effective policy（值 / 来源 / harness 默认），不构建中间件。
+
+    优先级：节点显式覆盖（仅真实 workflow 节点）> 场景 policy
+    （Scenario 字段 / spec.harness / spec.policies）> harness 默认。
+    """
+    if execution is None:
+        resolve = getattr(scenario, "resolve_execution", None)
+        execution = resolve() if callable(resolve) else None
+    specs = _harness_default_specs()
+    specs = _apply_layer(specs, _scenario_layer(scenario, hook_manager, execution), source="scenario_policy")
+    if node_overrides:
+        specs = _apply_layer(specs, node_overrides, source="node_override")
+    rows: list[dict[str, Any]] = []
+    for spec in specs:
+        policy = policy_registry.find(spec.name)
+        rows.append(
+            {
+                "name": spec.name,
+                "enabled": bool(spec.enabled),
+                "value": bool(spec.enabled),
+                "source": spec.source,
+                "default": bool(spec.default),
+                "args": _jsonable(dict(spec.args)),
+                "slot": policy.slot if policy is not None else None,
+                "label": policy.label if policy is not None else spec.name,
+            }
+        )
+    return rows
+
+
+def default_policies(
+    scenario: Any,
+    hook_manager: Any = None,
+    execution: Any = None,
+) -> list[PolicySpec]:
+    """兼容入口：返回场景层合并后的 specs（不含节点覆盖）。"""
+    if execution is None:
+        resolve = getattr(scenario, "resolve_execution", None)
+        execution = resolve() if callable(resolve) else None
+    return _apply_layer(
+        _harness_default_specs(),
+        _scenario_layer(scenario, hook_manager, execution),
+        source="scenario_policy",
+    )
+
+
+def _merge(
+    base: list[PolicySpec],
+    overrides: list[Any] | None,
+    *,
+    source: str = "scenario_policy",
+) -> list[PolicySpec]:
+    return _apply_layer(base, overrides, source=source)
 
 
 def _validate_specs(specs: list[PolicySpec]) -> None:
     errors = [
         f"策略 {spec.name} 被关闭但没有写 reason：移除一层守卫必须可审计"
         for spec in specs
-        if not spec.enabled and not (spec.reason or "").strip()
+        if not spec.enabled
+        and spec.source != "harness_default"
+        and not (spec.reason or "").strip()
     ]
     if errors:
         raise PipelineError(errors)
@@ -274,13 +428,18 @@ def _entries(
     hook_manager: Any = None,
     overrides: list[Any] | None = None,
     execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
 ) -> list[Entry]:
     if execution is None:
         resolve = getattr(scenario, "resolve_execution", None)
         execution = resolve() if callable(resolve) else None
     if overrides is None and execution is not None:
         overrides = getattr(execution, "policies", None)
-    specs = _merge(default_policies(scenario, hook_manager, execution), overrides)
+    specs = default_policies(scenario, hook_manager, execution)
+    specs = _merge(specs, overrides, source="scenario_policy")
+    if node_overrides:
+        specs = _merge(specs, node_overrides, source="node_override")
     _validate_specs(specs)
 
     entries: list[Entry] = []
@@ -349,11 +508,15 @@ def build_pipeline(
     hook_manager: Any = None,
     overrides: list[Any] | None = None,
     execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
 ) -> list[Any]:
     """编译出最终的中间件列表（由外到内）。"""
     return [
         entry.factory()
-        for entry in _entries(scenario, hook_manager, overrides, execution)
+        for entry in _entries(
+            scenario, hook_manager, overrides, execution, node_overrides=node_overrides
+        )
     ]
 
 
@@ -362,11 +525,15 @@ def describe_pipeline(
     hook_manager: Any = None,
     overrides: list[Any] | None = None,
     execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
 ) -> list[str]:
     """返回装配后的策略名（由外到内），用于测试、UI 与排查。"""
     return [
         entry.name
-        for entry in _entries(scenario, hook_manager, overrides, execution)
+        for entry in _entries(
+            scenario, hook_manager, overrides, execution, node_overrides=node_overrides
+        )
     ]
 
 
@@ -375,6 +542,8 @@ def describe_chain(
     hook_manager: Any = None,
     overrides: list[Any] | None = None,
     execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     """返回装配后的策略明细（由外到内）：中文名、说明、分层、slot。
 
@@ -383,7 +552,10 @@ def describe_chain(
     """
     chain: list[dict[str, Any]] = []
     for order, entry in enumerate(
-        _entries(scenario, hook_manager, overrides, execution), 1
+        _entries(
+            scenario, hook_manager, overrides, execution, node_overrides=node_overrides
+        ),
+        1,
     ):
         doc = POLICY_DOCS.get(entry.policy)
         label = doc.label if doc else entry.name

@@ -99,28 +99,22 @@ except ImportError:  # artifact runtime is flat (server/store/worker on sys.path
     )
 
 try:  # project-owned business policy; generic artifacts may not ship it
-    from robot_vacuum_support import (
-        apply_assistant_turn as support_apply_assistant_turn,
-        apply_user_turn as support_apply_user_turn,
-        decision_snapshot as support_decision_snapshot,
+    from robot_vacuum_support import execution as support_execution
+    from robot_vacuum_support.state import (
         handoff_summary as support_handoff_summary,
-        interpret_turn as support_interpret_turn,
-        LlmTurnInterpreter as SupportTurnInterpreter,
         load_state as support_load_state,
-        mark_protocol_ack as support_mark_protocol_ack,
-        prompt_context as support_prompt_context,
-        protocol_ack_answer as support_protocol_ack_answer,
         public_view as support_public_view,
     )
-    from robot_vacuum_support import routing as support_routing
-    from robot_vacuum_support.evidence import review as support_review_evidence
 
     SUPPORT_ENABLED = True
-    _SUPPORT_INTERPRETER = SupportTurnInterpreter()
+    _SUPPORT_INTERPRETER = support_execution.default_interpreter()
 except ImportError:  # pragma: no cover - generic runtime fallback
     SUPPORT_ENABLED = False
     _SUPPORT_INTERPRETER = None
-    support_routing = None  # type: ignore
+    support_execution = None  # type: ignore
+    support_handoff_summary = None  # type: ignore
+    support_load_state = None  # type: ignore
+    support_public_view = None  # type: ignore
 
 try:
     from core.observability.turn_usage import TurnUsage
@@ -131,11 +125,6 @@ try:
     from core.observability import latency
 except ImportError:  # pragma: no cover - very old artifact
     latency = None  # type: ignore
-
-
-def _interpret_enabled() -> bool:
-    value = os.getenv("RVS_TURN_INTERPRETER", "").strip().lower()
-    return value not in {"off", "0", "false", "no"}
 
 
 def _failure_code(exc: BaseException) -> str:
@@ -172,77 +161,6 @@ def _failure_requires_configuration(exc: BaseException) -> bool:
         return failure_requires_configuration(exc)
     except Exception:  # noqa: BLE001
         return False
-
-
-def _new_turn_meter():
-    return TurnUsage() if TurnUsage is not None else None
-
-
-def _record_interpretation(meter, bundle: dict | None, route: str, turn: int) -> None:
-    if meter is None or not isinstance(bundle, dict):
-        return
-    trace = bundle.get("trace") or {}
-    reused = trace.get("method") == "replay_cache"
-    meter.record(
-        layer="interpretation",
-        usage=trace.get("usage"),
-        model=trace.get("model"),
-        latency_ms=trace.get("latency_ms"),
-        call_id=f"interpretation-{turn}",
-        method=trace.get("method"),
-        route=route,
-        fallback=bool(trace.get("fallback_used")),
-        reused=reused,
-        model_requests=0 if reused else 1,
-        attempts=trace.get("attempts"),
-    )
-
-
-def _record_main_agent(meter, result_usage: dict | None, turn: int) -> None:
-    if meter is None:
-        return
-    main = ((result_usage or {}).get("by_layer") or {}).get("main_agent") or {}
-    if not main:
-        return
-    meter.record(
-        layer="main_agent",
-        usage={
-            "input_tokens": main.get("input_tokens"),
-            "output_tokens": main.get("output_tokens"),
-            "total_tokens": main.get("total_tokens"),
-        },
-        model=None,
-        latency_ms=main.get("latency_ms"),
-        call_id=f"main-agent-{turn}",
-        method="react_answer",
-        route="semantic",
-        # The trace may contain several main-agent model calls (e.g. a tool
-        # round).  Keep one combined usage row for this turn, but carry the
-        # true request count so routing/accounting is not understated.
-        model_requests=int(main.get("model_calls") or main.get("requests") or 1),
-        aggregated=bool(int(main.get("model_calls") or 0) > 1),
-    )
-
-
-def _turn_metrics(meter, route: dict | None, turn: int) -> dict | None:
-    if meter is None:
-        return None
-    summary = meter.summary()
-    summary["route"] = (route or {}).get("route")
-    summary["route_reason"] = (route or {}).get("reason")
-    summary["turn"] = turn
-    return summary
-
-
-def _usage_with_metrics(result_usage: dict | None, metrics: dict | None) -> dict | None:
-    usage = dict(result_usage or {})
-    if metrics is not None:
-        usage["turn_metrics"] = metrics
-        usage["total_tokens_all_layers"] = (metrics.get("total") or {}).get("total_tokens")
-        usage["usage_status_all_layers"] = metrics.get("usage_status")
-        usage["cost"] = None
-        usage["cost_status"] = "unavailable_no_authoritative_unit_price"
-    return usage or None
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
@@ -1279,192 +1197,59 @@ def create_app(config) -> FastAPI:
     def _reserve(session_id: str, *, resume: bool = False):
         return reserve_session(manager, store, session_id, resume=resume)
 
-    def _review(state, answer: str, retrieval):
-        if not SUPPORT_ENABLED or not state:
-            return retrieval
-        public = support_public_view(state)
-        case = public.get("active_case") or {}
-        review = support_review_evidence(
-            answer,
-            retrieval,
-            recharge_scope=case.get("topic") == "recharge_failure",
-        )
-        merged = dict(retrieval or {"status": "not_retrieved", "results": []})
-        merged["review"] = review
-        return merged
-
     def _sse(session_id: str, body: dict, action: str, reservation, latency_ctx: dict | None = None, request_span=None):
         updates: queue.Queue = queue.Queue()
         ctx = dict(latency_ctx or {})
 
         def execute():
             handed_to_manager = False
-            run_prompt = str(body.get("prompt") or "")
-            support_state = None
+            prepared = None
             support_payload = None
             retrieval = None
-            turn_meter = _new_turn_meter()
-            route_decision = None
             ctx_cm = latency.bind_context(**ctx) if latency is not None else None
             if ctx_cm is not None:
                 ctx_cm.__enter__()
             try:
-                if latency is not None:
-                    with latency.span("server.history_state"):
-                        history = store.history(session_id)
-                        request_body = {**body, "history": history}
-                        if SUPPORT_ENABLED:
-                            support_state = support_load_state(store.load_support_state(session_id))
+                if SUPPORT_ENABLED:
+                    if latency is not None:
+                        with latency.span("server.turn_prepare", action=action):
+                            if action == "resume":
+                                prepared = support_execution.prepare_resume(
+                                    store,
+                                    session_id,
+                                    body,
+                                    latency_module=latency,
+                                )
+                            else:
+                                prepared = support_execution.prepare_run(
+                                    store,
+                                    session_id,
+                                    body,
+                                    interpreter=_SUPPORT_INTERPRETER,
+                                    latency_module=latency,
+                                )
+                    else:
+                        if action == "resume":
+                            prepared = support_execution.prepare_resume(
+                                store, session_id, body
+                            )
+                        else:
+                            prepared = support_execution.prepare_run(
+                                store,
+                                session_id,
+                                body,
+                                interpreter=_SUPPORT_INTERPRETER,
+                            )
+                    request_body = prepared.request_body
+                    if prepared.direct_payload is not None:
+                        updates.put(
+                            {"type": "workspace", "path": str(store.workspace_path(session_id))}
+                        )
+                        updates.put({"type": "answer", **prepared.direct_payload})
+                        return
                 else:
                     history = store.history(session_id)
                     request_body = {**body, "history": history}
-                    if SUPPORT_ENABLED:
-                        support_state = support_load_state(store.load_support_state(session_id))
-
-                # Transcript is server-authoritative and written once:
-                # - run: one user message now, then assistant/error;
-                # - resume: one approval event, never an empty/duplicate user.
-                if action == "resume":
-                    decision = bool(body.get("decision", True))
-                    store.append_message(
-                        session_id,
-                        "event",
-                        "approval:" + ("approve" if decision else "reject"),
-                        thread_id=body.get("thread_id"),
-                    )
-                    if support_state is not None:
-                        request_body["support_context"] = support_prompt_context(support_state)
-                else:
-                    next_turn = int((support_state or {}).get("turn") or 0) + 1
-                    user_record = store.append_message(
-                        session_id,
-                        "user",
-                        run_prompt,
-                        turn=next_turn,
-                        author={"kind": "user", "display_name": "用户"},
-                    )
-                    if support_state is not None:
-                        interpretation = None
-                        state_version_before = None
-                        if support_routing is not None:
-                            # Route evidence is recorded before any model call.
-                            state_version_before = support_routing.state_version(support_state)
-                            route_decision = support_routing.decide(support_state, run_prompt)
-                        route_name = (route_decision or {}).get("route") or "semantic"
-                        route_reason = (route_decision or {}).get("reason") or "no_route"
-                        if route_decision and route_decision.get("bundle") is not None:
-                            # Deterministic slot answer / protocol ack / replay.
-                            interpretation = route_decision["bundle"]
-                            if route_name == "replay_cache":
-                                _record_interpretation(
-                                    turn_meter, interpretation, route_name, next_turn
-                                )
-                        elif run_prompt and _interpret_enabled() and _SUPPORT_INTERPRETER is not None:
-                            # One semantic call, only when routing says it is
-                            # needed.  Its input is the compressed decision
-                            # snapshot (needed facts + pending question), not a
-                            # replay of the whole session.
-                            call_id = f"interpretation-{next_turn}"
-                            if latency is not None:
-                                with latency.bind_call(call_id, layer="interpretation"):
-                                    with latency.span(
-                                        "server.interpretation",
-                                        call_id=call_id,
-                                        method="llm_structured",
-                                    ):
-                                        interpretation = support_interpret_turn(
-                                            run_prompt,
-                                            interpreter=_SUPPORT_INTERPRETER,
-                                            context=(
-                                                support_routing.interpretation_input(support_state)
-                                                if support_routing is not None
-                                                else support_public_view(support_state)
-                                            ),
-                                        )
-                            else:
-                                interpretation = support_interpret_turn(
-                                    run_prompt,
-                                    interpreter=_SUPPORT_INTERPRETER,
-                                    context=(
-                                        support_routing.interpretation_input(support_state)
-                                        if support_routing is not None
-                                        else support_public_view(support_state)
-                                    ),
-                                )
-                            _record_interpretation(
-                                turn_meter, interpretation, route_name, next_turn
-                            )
-                        applied = support_apply_user_turn(
-                            support_state,
-                            run_prompt,
-                            (user_record or {}).get("message_id"),
-                            interpretation=interpretation,
-                            route=route_name,
-                            route_reason=route_reason,
-                        )
-                        support_state = applied["state"]
-                        if (
-                            route_name == "semantic"
-                            and isinstance(interpretation, dict)
-                            and state_version_before
-                            and support_routing is not None
-                        ):
-                            support_routing.remember_interpretation(
-                                support_state,
-                                run_prompt,
-                                interpretation,
-                                state_version_value=state_version_before,
-                            )
-                        if route_name == "protocol_ack":
-                            # No model call, no new question, no fake resolution.
-                            support_state = support_mark_protocol_ack(
-                                support_state, support_state.get("turn")
-                            )
-                        # Persist user facts BEFORE the model runs.  A failed or
-                        # timed-out model must not erase or invent user facts.
-                        store.save_support_state(session_id, support_state)
-                        snapshot = support_decision_snapshot(support_state)
-                        support_state["decision_snapshot"] = snapshot
-                        request_body["support_snapshot"] = snapshot
-                        request_body["support_context"] = support_prompt_context(
-                            support_state, snapshot
-                        )
-                        direct = applied.get("direct_answer")
-                        if route_name == "protocol_ack" and not direct:
-                            direct = support_protocol_ack_answer(support_state)
-                        if direct:
-                            metrics = _turn_metrics(turn_meter, route_decision, next_turn)
-                            assistant_record = store.append_message(
-                                session_id,
-                                "assistant",
-                                direct,
-                                turn=support_state.get("turn"),
-                                author={"kind": "assistant", "display_name": "机器人助手"},
-                            )
-                            support_state = support_apply_assistant_turn(
-                                support_state,
-                                direct,
-                                (assistant_record or {}).get("message_id"),
-                                turn=support_state.get("turn"),
-                                retrieval=None,
-                            )
-                            support_state["last_turn_metrics"] = metrics
-                            store.save_support_state(session_id, support_state)
-                            support_payload = support_public_view(support_state)
-                            updates.put(
-                                {"type": "workspace", "path": str(store.workspace_path(session_id))}
-                            )
-                            updates.put(
-                                {
-                                    "type": "answer",
-                                    "answer": direct,
-                                    "direct": True,
-                                    "usage": _usage_with_metrics(None, metrics),
-                                    "support": support_payload,
-                                    "retrieval": None,
-                                }
-                            )
-                            return
 
                 def on_event(event):
                     if event.get("type") == "answer_delta":
@@ -1499,86 +1284,46 @@ def create_app(config) -> FastAPI:
                         result = manager.run(
                             session_id, request_body, event_sink=on_event, reservation=reservation
                         )
-                answer = str(result.get("answer") or "")
-                interrupted = result.get("status") == "interrupted"
-                if latency is not None:
-                    with latency.span("server.persist_assistant"):
-                        assistant_record = store.append_message(
-                            session_id,
-                            "assistant",
-                            answer,
-                            interrupted=interrupted,
-                            thread_id=result.get("thread_id"),
-                            turn=(support_state or {}).get("turn"),
-                            author={"kind": "assistant", "display_name": "机器人助手"},
-                        )
+
+                if SUPPORT_ENABLED:
+                    finished = support_execution.finish_run(
+                        store,
+                        session_id,
+                        prepared,
+                        result,
+                        latency_module=latency,
+                    )
+                    answer = finished["answer"]
+                    interrupted = result.get("status") == "interrupted"
+                    retrieval = finished["retrieval"]
+                    support_payload = finished["support"]
+                    usage_payload = finished["usage"]
+                    observable = finished["observable"]
                 else:
-                    assistant_record = store.append_message(
+                    answer = str(result.get("answer") or "")
+                    interrupted = result.get("status") == "interrupted"
+                    store.append_message(
                         session_id,
                         "assistant",
                         answer,
                         interrupted=interrupted,
                         thread_id=result.get("thread_id"),
-                        turn=(support_state or {}).get("turn"),
                         author={"kind": "assistant", "display_name": "机器人助手"},
                     )
-                if support_state is not None:
-                    if latency is not None:
-                        with latency.span("server.postprocess"):
-                            if turn_meter is not None:
-                                turn_meter.merge(result.get("turn_usage"))
-                                _record_main_agent(turn_meter, result.get("usage"), int(support_state.get("turn") or 0))
-                            retrieval = _review(support_state, answer, result.get("retrieval"))
-                            support_state = support_apply_assistant_turn(
-                                support_state,
-                                answer,
-                                (assistant_record or {}).get("message_id"),
-                                turn=support_state.get("turn"),
-                                retrieval=retrieval,
-                            )
-                            metrics = _turn_metrics(
-                                turn_meter, route_decision, int(support_state.get("turn") or 0)
-                            )
-                            support_state["last_turn_metrics"] = metrics
-                    else:
-                        if turn_meter is not None:
-                            # Worker meter carries rag_summary calls; main_agent is
-                            # read from trace run_end (not from budget) exactly once.
-                            turn_meter.merge(result.get("turn_usage"))
-                            _record_main_agent(turn_meter, result.get("usage"), int(support_state.get("turn") or 0))
-                        retrieval = _review(support_state, answer, result.get("retrieval"))
-                        support_state = support_apply_assistant_turn(
-                            support_state,
-                            answer,
-                            (assistant_record or {}).get("message_id"),
-                            turn=support_state.get("turn"),
-                            retrieval=retrieval,
-                        )
-                        metrics = _turn_metrics(
-                            turn_meter, route_decision, int(support_state.get("turn") or 0)
-                        )
-                        support_state["last_turn_metrics"] = metrics
-                    if latency is not None:
-                        with latency.span("server.persist_support_state"):
-                            store.save_support_state(session_id, support_state)
-                    else:
-                        store.save_support_state(session_id, support_state)
-                    support_payload = support_public_view(support_state)
-                else:
-                    metrics = None
-                store.update(
-                    session_id,
-                    thread_id=result.get("thread_id"),
-                    last_status=result.get("status"),
-                )
-                observable = {
-                    "trace_id": result.get("trace_id"),
-                    "node_events": result.get("node_events") or [],
-                    "trace": result.get("trace") or [],
-                    "context": result.get("context") or {},
-                }
+                    store.update(
+                        session_id,
+                        thread_id=result.get("thread_id"),
+                        last_status=result.get("status"),
+                    )
+                    usage_payload = result.get("usage")
+                    observable = {
+                        "trace_id": result.get("trace_id"),
+                        "node_events": result.get("node_events") or [],
+                        "trace": result.get("trace") or [],
+                        "context": result.get("context") or {},
+                    }
+
                 updates.put({"type": "workspace", "path": str(store.workspace_path(session_id))})
-                usage_payload = _usage_with_metrics(result.get("usage"), metrics)
                 if latency is not None:
                     latency.point(
                         "server.answer_enqueue",
@@ -1624,31 +1369,25 @@ def create_app(config) -> FastAPI:
                     if isinstance(exc, ApprovalGone)
                     else _failure_code(exc)
                 )
-                if SUPPORT_ENABLED and support_state is not None:
-                    retrieval = getattr(exc, "retrieval", retrieval)
-                    if retrieval is not None:
-                        retrieval = _review(support_state, "", retrieval)
-                        support_state["last_retrieval"] = retrieval
-                        active_id = support_state.get("active_case_id")
-                        for case in support_state.get("cases") or []:
-                            if case.get("case_id") == active_id:
-                                case["last_retrieval"] = retrieval
-                                break
-                        try:
-                            store.save_support_state(session_id, support_state)
-                        except Exception:
-                            pass
-                    support_payload = support_public_view(support_state)
-                try:
-                    store.append_message(session_id, "error", error_message)
-                except Exception:
-                    pass
-                try:
-                    # Session metadata is the product's run record: an
-                    # explicitly failed turn must not leave last_status=completed.
-                    store.update(session_id, last_status="error")
-                except Exception:
-                    pass
+                if SUPPORT_ENABLED:
+                    failed = support_execution.fail_run(
+                        store,
+                        session_id,
+                        prepared,
+                        exc,
+                        error_message=error_message,
+                    )
+                    retrieval = failed.get("retrieval", retrieval)
+                    support_payload = failed.get("support", support_payload)
+                else:
+                    try:
+                        store.append_message(session_id, "error", error_message)
+                    except Exception:
+                        pass
+                    try:
+                        store.update(session_id, last_status="error")
+                    except Exception:
+                        pass
                 updates.put(
                     {
                         "type": "error",

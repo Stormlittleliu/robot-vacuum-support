@@ -36,6 +36,39 @@ _NODE_ACTIVATIONS: ContextVar[dict[str, int] | None] = ContextVar(
 _TOKEN_SINK: ContextVar[Callable[[str], None] | None] = ContextVar(
     "token_sink", default=None
 )
+_WORKFLOW_RUNTIME: ContextVar[dict[str, Any] | None] = ContextVar(
+    "workflow_runtime", default=None
+)
+
+
+@contextmanager
+def workflow_runtime_scope(
+    *,
+    workflow: str | None,
+    thread_id: str | None,
+    trace_id: str | None,
+):
+    """Expose the real workflow root identity to child agent nodes.
+
+    Child nodes use this to build an explicit namespace and parent trace edge;
+    they never invent a second root run.
+    """
+    token = _WORKFLOW_RUNTIME.set(
+        {
+            "workflow": workflow,
+            "thread_id": thread_id,
+            "trace_id": trace_id,
+            "namespace": f"workflow:{workflow or 'unknown'}",
+        }
+    )
+    try:
+        yield
+    finally:
+        _WORKFLOW_RUNTIME.reset(token)
+
+
+def current_workflow_runtime() -> dict[str, Any] | None:
+    return _WORKFLOW_RUNTIME.get()
 
 
 @contextmanager
@@ -121,15 +154,58 @@ class _PreviewTool:
 
 
 class ToolView:
-    """块执行时需要的"场景视图"：只暴露 ``get_tool`` 与 ``model``。"""
+    """块执行时需要的"场景视图"：只暴露 ``get_tool`` 与 ``model``。
 
-    def __init__(self, tools: list[Any] | None = None, model: Any = None):
-        self.model = model
+    ``base`` 是真实 Scenario 时，继承其 harness / policy 字段；workflow 的
+    Agent 节点因此仍走同一套 FrameworkAgent 装配。节点自己的 checkpoint
+    永远关闭，避免污染 workflow 根 checkpoint。
+    """
+
+    def __init__(self, tools: list[Any] | None = None, model: Any = None, base: Any = None):
+        self.base = base
+        self.model = model if model is not None else getattr(base, "model", None)
         self._tools = {
             str(getattr(tool, "name", "")): tool
             for tool in (tools or [])
             if getattr(tool, "name", None)
         }
+        # 继承字段（ToolView 不是 Scenario，但 FrameworkAgent 只读这些属性）。
+        self.name = getattr(base, "name", "workflow_node")
+        self.description = getattr(base, "description", "")
+        self.system_prompt = getattr(base, "system_prompt", "")
+        self.kind = getattr(base, "kind", "agent")
+        self.mode = "workflow_node"
+        self.context = dict(getattr(base, "context", None) or {})
+        self.high_risk_tools = dict(getattr(base, "high_risk_tools", None) or {})
+        self.fallback_model = getattr(base, "fallback_model", None)
+        self.enable_todo = bool(getattr(base, "enable_todo", False))
+        self.enable_summarization = bool(getattr(base, "enable_summarization", False))
+        self.summarization_trigger = getattr(base, "summarization_trigger", ("messages", 30))
+        self.summarization_keep = getattr(base, "summarization_keep", ("messages", 12))
+        self.tool_call_limit = getattr(base, "tool_call_limit", None)
+        self.token_budget = getattr(base, "token_budget", None)
+        self.pii_types = list(getattr(base, "pii_types", None) or [])
+        self.tool_policy = dict(getattr(base, "tool_policy", None) or {})
+        self.tool_timeout_seconds = getattr(base, "tool_timeout_seconds", 30.0)
+        self.tool_timeouts = dict(getattr(base, "tool_timeouts", None) or {})
+        self.planning_policy = getattr(base, "planning_policy", None)
+        self.runtime = getattr(base, "runtime", None)
+        base_execution = getattr(base, "execution", None)
+        from modules.contracts.agent import ExecutionSpec
+
+        self._execution = ExecutionSpec(
+            model=self.model,
+            middleware=[],
+            response_format=None,
+            workflow_factory=None,
+            checkpoint=False,
+            checkpoint_backend="memory",
+            policies=list(getattr(base_execution, "policies", None) or []) or None,
+            mode="workflow_node",
+        )
+
+    def resolve_execution(self):
+        return self._execution
 
     @property
     def tools(self) -> list[Any]:
@@ -174,6 +250,7 @@ def compile_spec(
     *,
     tools: list[Any] | None = None,
     model: Any = None,
+    base_scenario: Any = None,
 ) -> CompiledSpec:
     """把 spec 编译成 ``CompiledSpec``；不构造 Scenario，不调用模型。"""
     tool_names = {
@@ -183,7 +260,7 @@ def compile_spec(
     if errors:
         raise SpecError(errors)
 
-    view = ToolView(tools, model)
+    view = ToolView(tools, model, base=base_scenario)
     compiled = CompiledSpec()
     with latency.span("worker.graph_compile", workflows=len(spec.workflows)):
         for name, workflow in spec.workflows.items():
@@ -196,7 +273,14 @@ def compile_spec(
                 graph = StateGraph(SpecState)
                 for node in workflow.nodes:
                     fn = NODE_REGISTRY[node.fn]
-                    graph.add_node(node.id, _instrumented(node.id, partial(fn, scenario=view, **node.args)))
+                    node_args = dict(node.args)
+                    # Node identity is runtime metadata, not a spec parameter.
+                    if node.fn == "react_loop":
+                        node_args["_node_id"] = node.id
+                    graph.add_node(
+                        node.id,
+                        _instrumented(node.id, partial(fn, scenario=view, **node_args)),
+                    )
 
                 plain: list[tuple[str, str]] = []
                 branches: dict[str, dict[str, str]] = {}
