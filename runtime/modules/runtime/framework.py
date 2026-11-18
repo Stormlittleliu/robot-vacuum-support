@@ -24,7 +24,10 @@ from langgraph.types import Command
 from modules.runtime.checkpoint import build_checkpointer
 from modules.contracts.agent import ExecutionSpec, Scenario
 from modules.runtime.hooks import HookManager
-from modules.runtime.pipeline import build_pipeline, effective_policies
+from modules.runtime.pipeline import (
+    build_pipeline_with_policies,
+    effective_policies,
+)
 from core.observability.budget import (
     RunBudget,
     budget_scope,
@@ -109,19 +112,23 @@ class FrameworkAgent:
 
         # 装配逻辑统一在 modules.runtime.pipeline：slot 决定顺序，spec 的 policies
         # 只做场景级覆盖；node_overrides 只允许真实 workflow 节点传入。
-        self.middleware = middleware if middleware is not None else build_pipeline(
-            scenario,
-            self.hook_manager,
-            self.execution.policies,
-            execution=self.execution,
-            node_overrides=node_overrides,
-        )
-        self.effective_policies = effective_policies(
-            scenario,
-            self.hook_manager,
-            self.execution,
-            node_overrides=node_overrides,
-        )
+        # effective_policies 与 middleware 来自同一次解析，避免审计行与实际装配分叉。
+        if middleware is not None:
+            self.middleware = middleware
+            self.effective_policies = effective_policies(
+                scenario,
+                self.hook_manager,
+                self.execution,
+                node_overrides=node_overrides,
+            )
+        else:
+            self.middleware, self.effective_policies = build_pipeline_with_policies(
+                scenario,
+                self.hook_manager,
+                self.execution.policies,
+                execution=self.execution,
+                node_overrides=node_overrides,
+            )
         self.last_effective_policies = list(self.effective_policies)
         if checkpointer is not None:
             self.checkpointer = checkpointer

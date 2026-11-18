@@ -14,7 +14,12 @@ import pytest
 from modules.contracts.agent import ExecutionSpec, Scenario
 from modules.runtime import pipeline
 from modules.runtime.framework import check_stop_when
-from modules.scenario_format.spec import ScenarioSpec, build_from_spec
+from modules.scenario_format.spec import (
+    ScenarioSpec,
+    SpecError,
+    build_from_spec,
+    validate_spec,
+)
 from robot_vacuum_support import execution as support_execution
 from robot_vacuum_support import state as support_state
 
@@ -317,3 +322,218 @@ def test_support_execution_protocol_ack_is_direct_and_persisted():
     assert prepared.direct_answer
     assert store.messages[-1]["role"] == "assistant"
     assert store.state["turn"] == 1
+
+
+def _native_spec(*, max_steps: int, harness_limit: int | None) -> ScenarioSpec:
+    return ScenarioSpec(
+        name="native-limit",
+        description="native-limit",
+        tools=["rag_summarize"],
+        harness={"tool_call_limit": harness_limit},
+        workflows={
+            "agent": {
+                "nodes": [
+                    {
+                        "id": "agent",
+                        "fn": "react_loop",
+                        "args": {
+                            "tools": ["rag_summarize"],
+                            "max_steps": max_steps,
+                        },
+                    }
+                ],
+                "edges": [["__start__", "agent"], ["agent", "__end__"]],
+            }
+        },
+    )
+
+
+def _workflow_spec(
+    *,
+    max_steps: int,
+    harness_limit: int | None,
+    policies: list[dict] | None = None,
+) -> ScenarioSpec:
+    return ScenarioSpec(
+        name="workflow-limit",
+        description="workflow-limit",
+        tools=["rag_summarize"],
+        harness={"tool_call_limit": harness_limit},
+        policies=policies,
+        workflows={
+            "flow": {
+                "nodes": [
+                    {
+                        "id": "agent",
+                        "fn": "react_loop",
+                        "args": {
+                            "tools": ["rag_summarize"],
+                            "max_steps": max_steps,
+                        },
+                    },
+                    {"id": "verify", "fn": "require_citation"},
+                ],
+                "edges": [
+                    ["__start__", "agent"],
+                    ["agent", "verify"],
+                    ["verify", "__end__"],
+                ],
+            }
+        },
+    )
+
+
+def test_native_max_steps_zero_inherits_harness_limit_and_positive_overrides():
+    inherited = build_from_spec(
+        _native_spec(max_steps=0, harness_limit=4),
+        tools=[_Tool("rag_summarize")],
+        model=object(),
+    )
+    assert inherited.mode == "agent"
+    assert inherited.tool_call_limit == 4
+    rows = {
+        row["name"]: row
+        for row in pipeline.effective_policies(inherited, execution=inherited.execution)
+    }
+    assert rows["limit"]["enabled"] is True
+    assert rows["limit"]["source"] == "scenario_policy"
+    assert rows["limit"]["args"]["run_limit"] == 4
+
+    overridden = build_from_spec(
+        _native_spec(max_steps=2, harness_limit=4),
+        tools=[_Tool("rag_summarize")],
+        model=object(),
+    )
+    assert overridden.mode == "agent"
+    assert overridden.tool_call_limit == 2
+
+
+def test_native_max_steps_negative_is_rejected_by_schema():
+    spec = _native_spec(max_steps=-1, harness_limit=4)
+    assert any("不能小于 0" in message for message in validate_spec(spec))
+    with pytest.raises(SpecError):
+        build_from_spec(spec, tools=[_Tool("rag_summarize")], model=object())
+
+
+def test_workflow_max_steps_zero_inherits_harness_limit_without_node_override():
+    spec = _workflow_spec(max_steps=0, harness_limit=5)
+    scenario = build_from_spec(spec, tools=[_Tool("rag_summarize")], model=object())
+    assert scenario.mode == "workflow"
+    assert scenario.tool_call_limit == 5
+    rows = {
+        row["name"]: row
+        for row in pipeline.effective_policies(scenario, execution=scenario.execution)
+    }
+    assert rows["limit"]["enabled"] is True
+    assert rows["limit"]["source"] == "scenario_policy"
+    assert rows["limit"]["args"]["run_limit"] == 5
+    # 0 不产生节点覆盖，因此不会把场景级 limit 关掉或替换成 0。
+    node_rows = {
+        row["name"]: row
+        for row in pipeline.effective_policies(
+            scenario, execution=scenario.execution, node_overrides=[]
+        )
+    }
+    assert node_rows["limit"]["enabled"] is True
+    assert node_rows["limit"]["source"] == "scenario_policy"
+
+
+def test_explicit_limit_policy_disable_is_not_reopened_by_zero_max_steps():
+    spec = _workflow_spec(
+        max_steps=0,
+        harness_limit=5,
+        policies=[{"name": "limit", "enabled": False, "reason": "test explicit disable"}],
+    )
+    scenario = build_from_spec(spec, tools=[_Tool("rag_summarize")], model=object())
+    assert scenario.tool_call_limit == 5
+    rows = {
+        row["name"]: row
+        for row in pipeline.effective_policies(scenario, execution=scenario.execution)
+    }
+    assert rows["limit"]["enabled"] is False
+    assert rows["limit"]["source"] == "scenario_policy"
+    assert "limit" not in pipeline.describe_pipeline(
+        scenario, execution=scenario.execution
+    )
+
+
+def test_react_loop_zero_max_steps_emits_no_limit_override(monkeypatch):
+    calls: list[dict] = []
+
+    class _FakeAgent:
+        def __init__(self, scenario, **kwargs):
+            calls.append(kwargs)
+            self.last_answer = "清理充电触点后再试。[故障排除.txt]"
+            self.last_stop_error = None
+
+        def execute_stream(self, text, thread_id="default"):
+            yield "清理充电触点后再试。[故障排除.txt]"
+
+    from modules.scenario_format import spec_nodes
+
+    monkeypatch.setattr("modules.runtime.framework.FrameworkAgent", _FakeAgent)
+
+    class _View:
+        name = "node-view"
+        model = object()
+        system_prompt = "base"
+        tools = [_Tool("rag_summarize")]
+        enable_summarization = True
+        tool_call_limit = 5
+
+        @staticmethod
+        def resolve_execution():
+            return ExecutionSpec(model=_View.model, checkpoint=False)
+
+        @staticmethod
+        def get_tool(name):
+            return _Tool(name)
+
+    spec_nodes.react_loop(
+        {"input": "回充失败"},
+        scenario=_View(),
+        tools=["rag_summarize"],
+        max_steps=0,
+        _node_id="agent",
+    )
+    overrides = {item["name"]: item for item in calls[0]["node_overrides"]}
+    assert "limit" not in overrides
+
+
+def test_mode_is_derived_from_factory_and_invalid_modes_are_rejected():
+    factory = lambda scenario: {}
+    execution = ExecutionSpec(workflow_factory=factory)
+    assert execution.mode == "workflow"
+    scenario = Scenario(name="wf", description="wf", execution=execution)
+    assert scenario.mode == "workflow"
+
+    with pytest.raises(ValueError):
+        ExecutionSpec(mode="router")
+    with pytest.raises(ValueError):
+        Scenario(name="bad", description="bad", mode="router")
+
+    assert any(
+        "mode 必须是 agent 或 workflow" in message
+        for message in validate_spec(ScenarioSpec(name="bad", mode="router"))
+    )
+    assert any(
+        "没有 workflow 图" in message
+        for message in validate_spec(ScenarioSpec(name="bad", mode="workflow"))
+    )
+
+
+def test_effective_policies_and_pipeline_share_explicit_overrides():
+    scenario = Scenario(name="single-source", description="single-source", enable_summarization=True)
+    execution = ExecutionSpec(model=object())
+    overrides = [{"name": "summarization", "enabled": False, "reason": "single source"}]
+    rows = {
+        row["name"]: row
+        for row in pipeline.effective_policies(
+            scenario, execution=execution, overrides=overrides
+        )
+    }
+    assert rows["summarization"]["enabled"] is False
+    assert rows["summarization"]["source"] == "scenario_policy"
+    assert "summarization" not in pipeline.describe_pipeline(
+        scenario, execution=execution, overrides=overrides
+    )

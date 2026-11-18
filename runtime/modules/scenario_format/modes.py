@@ -23,10 +23,13 @@ from modules.scenario_format.edges import END, START, split_edge
 #: react_loop 的默认停止语义；只有这一种能无损投影到普通 Agent。
 ORDINARY_STOP = "no_tool_calls"
 
+#: 用户可声明的场景模式；``workflow_node`` 只存在于内部 ExecutionSpec。
+VALID_SCENE_MODES = frozenset({"agent", "workflow"})
+
 
 def _explicit_mode(draft: dict[str, Any]) -> str | None:
     explicit = str(draft.get("mode") or "").strip()
-    return explicit if explicit in {"agent", "workflow"} else None
+    return explicit if explicit in VALID_SCENE_MODES else None
 
 
 def _workflows(draft: dict[str, Any]) -> dict[str, Any]:

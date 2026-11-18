@@ -263,15 +263,14 @@ def build_from_spec(
 
     harness = spec.harness
     draft = spec.model_dump()
+    # ``validate_spec`` 已经拒绝非法显式 mode / 无图的 workflow；这里再按同一
+    # 规范化定义取一次，Scenario 与 ExecutionSpec 都写这个值，避免各自默认 agent。
     mode = infer_scene_mode(draft)
+    if mode == "workflow" and not spec.workflows:
+        raise SpecError(["mode=workflow 但没有 workflow 图"])
     issues = agent_contract_issues(draft)
     if issues:
         raise SpecError(issues)
-    has_react_loop = any(
-        node.fn == "react_loop"
-        for workflow in spec.workflows.values()
-        for node in workflow.nodes
-    )
     agent_node = None
     if mode == "agent":
         # 普通 Agent scene 不建 wrapper graph：react_loop 的显式配置就是
@@ -293,16 +292,22 @@ def build_from_spec(
                 max_steps = int(agent_node.args.get("max_steps") or 0)
             except (TypeError, ValueError):
                 raise SpecError(["react_loop.args.max_steps 必须是整数"])
-            tool_call_limit = max_steps if max_steps > 0 else None
+            # 0 不是"关闭限制"，而是"没有节点覆盖"：继续沿用场景级
+            # harness.tool_call_limit；正值才覆盖。负值由既有参数 schema
+            # (minimum=0) 拒绝，不在这里夹成 0。
+            if max_steps < 0:
+                raise SpecError(["react_loop.args.max_steps 不能小于 0"])
+            tool_call_limit = max_steps if max_steps > 0 else harness.tool_call_limit
         else:
             tool_call_limit = harness.tool_call_limit
     else:
         selected_names = list(spec.tools)
         system_prompt = spec.system_prompt
         stop_when = "no_tool_calls"
-        # react_loop 自己持有 max_steps；外层再加一道 tool_call_limit 会把
-        # 复杂任务的预算截在更低的值上，且错误看起来像“循环坏了”。
-        tool_call_limit = None if has_react_loop else harness.tool_call_limit
+        # workflow 的 react_loop 节点自己持有 max_steps；0 表示没有节点覆盖，
+        # 此时必须继承场景级 harness.tool_call_limit。正值由节点 override
+        # 覆盖场景值，所以这里不能再把场景限制丢掉。
+        tool_call_limit = harness.tool_call_limit
 
     missing = [name for name in selected_names if name not in by_name]
     if missing:

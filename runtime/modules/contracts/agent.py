@@ -9,6 +9,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+#: 对外的结构模式；``workflow_node`` 只用于 workflow 子 Agent 的内部执行面。
+SCENE_MODES = frozenset({"agent", "workflow"})
+EXECUTION_MODES = SCENE_MODES | {"workflow_node"}
+
 
 @dataclass
 class ExecutionSpec:
@@ -35,6 +39,18 @@ class ExecutionSpec:
     stop_when: str = "no_tool_calls"
     #: 装配后各策略的值 / 来源 / 默认值；由 pipeline 统一计算。
     effective_policies: list[dict[str, Any]] | None = None
+
+    def __post_init__(self) -> None:
+        mode = str(self.mode or "").strip()
+        if mode not in EXECUTION_MODES:
+            raise ValueError(
+                f"ExecutionSpec.mode 必须是 {sorted(EXECUTION_MODES)} 之一，收到 {self.mode!r}"
+            )
+        # workflow_factory 是实际执行路径；带工厂却保留默认 agent 会掩盖
+        # workflow。这里由工厂统一派生，避免每个调用方各写一次。
+        if self.workflow_factory is not None and mode == "agent":
+            mode = "workflow"
+        self.mode = mode
 
 
 @dataclass
@@ -71,6 +87,20 @@ class Scenario:
     runtime: Any = None
     # 活对象集合：模型、中间件、输出 schema、工作流工厂、checkpoint。
     execution: ExecutionSpec | None = None
+
+    def __post_init__(self) -> None:
+        mode = str(self.mode or "").strip()
+        if mode not in SCENE_MODES:
+            raise ValueError(
+                f"Scenario.mode 必须是 {sorted(SCENE_MODES)} 之一，收到 {self.mode!r}"
+            )
+        # Scenario 与 ExecutionSpec 不能各留一份默认 agent：执行面已有
+        # workflow 工厂/模式时，Scenario.mode 必须同步成 workflow。
+        if self.execution is not None:
+            execution_mode = str(getattr(self.execution, "mode", "") or "").strip()
+            if execution_mode in SCENE_MODES:
+                mode = execution_mode
+        self.mode = mode
 
     def resolve_execution(self) -> ExecutionSpec:
         """返回这次运行的执行面；没有显式 execution 时用一份空默认。"""

@@ -10,7 +10,7 @@
 - `workflow`：保留真实 LangGraph；只有 workflow 才执行 `workflow_factory`。
 - 旧 spec 没有显式 `mode` 时按结构保守推断：恰好一个 workflow、唯一 `react_loop`、恰好两条无条件边 `START → react_loop → END`，且 `stop_when` 缺省或为 `no_tool_calls` → `agent`；多节点、额外/条件边、`answer_has_citation` 等非默认停止语义 → `workflow`。没有图的原生配置仍为 `agent`。
 
-`ScenarioSpec` 现在接受可选 `mode` 字段；`Scenario.mode` / `ExecutionSpec.mode` 保存解析结果。
+`ScenarioSpec` 现在接受可选 `mode` 字段；`Scenario.mode` / `ExecutionSpec.mode` 保存解析结果。显式 `mode` 只接受 `agent` / `workflow`，`workflow` 必须有实际图；`ExecutionSpec` 在存在 `workflow_factory` 时派生为 `workflow`，`Scenario` 与执行面同步，不再由两处默认 `agent` 互相掩盖。
 
 ### 1.2 普通单 `react_loop` spec 的无损映射
 
@@ -63,6 +63,8 @@
 
 普通 Agent 没有节点覆盖层；单 `react_loop` 的配置在构建阶段已经落成场景字段，不再靠 wrapper graph 模拟节点覆盖。
 
+本轮（2026-11-18）把策略解析收敛到 `pipeline._resolved_specs`：`FrameworkAgent` 用 `build_pipeline_with_policies` 一次拿到真实中间件和审计行，`effective_policies()` 走同一入口，不再维护第二份默认表。`max_steps=0` 表示“无节点覆盖、继承场景 `harness.tool_call_limit`”，正值才覆盖；显式 `spec.policies[].enabled=false` 保持关闭。细节与实测见 5.2、6.1。
+
 已知差异修复：`enable_summarization=true` 在旧 `react_loop` 路径没有生效。现在原生 Agent 和 workflow 的 Agent 节点都会实际装配 summarization；这是行为变化，已纳入整产品验证，而不是只宣称“helper 已抽取”。
 
 ### 2.3 装配顺序
@@ -100,19 +102,31 @@
 
 ### 5.1 P2 共享兼容差异核对（复核更正）
 
-结论：**只到最小调用兼容，不是 API / 字段完全一致**。此前“`FrameworkAgent(scenario)` 兼容、`invoke()` / `execute_stream()` 保留”被表述成“API 一致”，现更正为下述有限兼容。本轮只更新本记录，未改 runtime、未跑产品。
+结论：**只到最小调用兼容，不是 API / 字段完全一致**。此前“`FrameworkAgent(scenario)` 兼容、`invoke()` / `execute_stream()` 保留”被表述成“API 一致”，现更正为下述有限兼容。当时（更正轮）只更新本记录，未改 runtime、未跑产品；修复见 5.2 / 6.1。
+
+> 2026-11-18 后续：本节第 3、4 项已按 5.2 修复；下面保留修复前的原文与结论，不删除历史记录。
 
 1. **共享最小 API 与客服扩展**：P2 共享最小 API 只有 `FrameworkAgent(scenario)`、`invoke()`、`execute_stream()`。客服侧 `FrameworkAgent.__init__` 还接受可选 `execution` / `tools` / `system_prompt` / `middleware` / `checkpointer` / `response_format` / `stop_when` / `node_overrides` / `trace_namespace` / `parent_trace_id`，这些是 P1 内部扩展，编辑器 / P2 没有对应字段。因此只保证“用 `scenario` 构造 + 调 `invoke` / `execute_stream`”这条最小路径可用；传扩展 kwargs 或依赖其语义不属于对 P2 的兼容承诺。
 2. **`ExecutionSpec` / `Scenario.mode` 等字段**：客服 `ExecutionSpec` / `Scenario.mode` 默认 `agent`，以及 `stop_when`、`effective_policies`，都是 P1 扩展；编辑器 / P2 无这些字段，分发仍按 `workflow_factory` 走 factory，不读 `mode`。因此不能称为字段一致，也不能假设 P2 会识别 `mode`。
-3. **`max_steps=0` 零保留语义（实际存在，未统一）**：客服 `runtime/modules/scenario_format/spec.py:296` 在显式 `max_steps <= 0` 时把 `tool_call_limit` 置 `None`，清掉 `harness.tool_call_limit`；`spec_nodes.py:1260` 同时构造 `enabled=false` 的 `limit` node override（`reason: react_loop.max_steps=0 disables the tool-call limit`）。这与 P2 “零保留场景限制”的冲突是真实执行路径，不是文档描述。
-4. **effective policy 与 mode 来源**：`effective_policies` 必须由真实装配（实际 `ExecutionSpec` / override / 默认表）派生，不能用推断值或文档表代替；`mode` 目前有 spec 显式值、结构推断、节点构造（如 `workflow_node`）等多处来源，待统一。不能宣称“字段完全一致”。
+3. **`max_steps=0` 零保留语义（2026-11-18 已修复）**：修复前，客服 `runtime/modules/scenario_format/spec.py:296` 在显式 `max_steps <= 0` 时把 `tool_call_limit` 置 `None`，清掉 `harness.tool_call_limit`；`spec_nodes.py:1260` 同时构造 `enabled=false` 的 `limit` node override（`reason: react_loop.max_steps=0 disables the tool-call limit`）。这与 P2 “零保留场景限制”的冲突曾是真实执行路径。现状见 5.2：0 表示“无节点覆盖、继承场景限制”，不再清空或合成 disabled override。
+4. **effective policy 与 mode 来源（2026-11-18 已修复）**：修复前，`effective_policies` 与 `build_pipeline` 各自从默认表重算，`mode` 有 spec 显式值、结构推断、节点构造等多处来源，`Scenario.mode` / `ExecutionSpec.mode` 的默认 `agent` 可能掩盖 workflow。现状见 5.2：两者共用一个 resolved specs 入口；mode 由规范化 spec / `workflow_factory` 派生并校验。
 
 未解决兼容项与下一步：
 
-- 上述 1–4 保留为未解决 / 待统一兼容项，本轮不改语义、不改 runtime。
-- 需在整产品入口（真实 artifact + HTTP/SSE）复验后才判断兼容范围；组件级最小调用通过不等于整产品兼容。
-- `max_steps=0`、`stop_when` 停止条件与预算 / 限制语义的取舍需产品层决策；本轮不擅自改动停止 / 预算语义，也不改 runtime 代码。
+- 第 1–2 项仍是兼容边界：只保证最小调用路径，P1 扩展 kwargs / 字段不被 P2 识别。第 3–4 项已按 5.2 修复，并通过完整 artifact 的 HTTP/SSE 入口验证；不再列为未解决。
+- 需在整产品入口（真实 artifact + HTTP/SSE）复验后才判断兼容范围；组件级最小调用通过不等于整产品兼容。5.2 已补做本轮整产品验证。
+- `max_steps=0` 的取舍已定为：0 = 无节点覆盖、继承场景 `harness.tool_call_limit`；正值覆盖；负值由既有参数 schema（`minimum=0`）拒绝；显式 `spec.policies[].enabled=false` 保留关闭。停止 / 预算语义本轮没有扩展。
 - 客服内部仍有 workflow 子 Agent 节点差异：checkpoint 关闭，thread 使用 `workflow:<name>/node:<id>` namespace 并带 parent trace；这是客服侧实现，不属于 P2 共享契约。
+
+### 5.2 策略对齐修复（2026-11-18）
+
+本轮只改实际执行路径，保留 P1 内部扩展，不要求 P2 增加公共字段：
+
+1. **零值继承 / 正值覆盖 / 负值拒绝**：`spec.py` 的 agent 分支在 `max_steps=0`（或字段缺省）时使用 `harness.tool_call_limit`，正值使用节点值；workflow 分支不再因为存在 `react_loop` 就丢掉 `harness.tool_call_limit`。`spec_nodes.react_loop` 只在 `max_steps > 0` 时生成 `limit` node override；0 不生成 override，也不再生成旧的 `enabled=false` 合成覆盖。负值仍由现有参数 schema 的 `minimum=0` 拒绝，不做 clamp。
+2. **显式关闭保留**：`spec.policies` 中 `{"name":"limit","enabled":false,"reason":...}` 仍是 `scenario_policy` 层关闭；`max_steps=0` 没有节点 override，因此不会把默认 0 重新解释成开启。正值节点覆盖仍按既有优先级高于场景层；本轮显式关闭配置使用 `max_steps=0`，没有把“显式关闭 + 正值覆盖”组合成同一场景。
+3. **mode 一致派生与校验**：`spec_check` 拒绝非法 `mode` 和“`mode=workflow` 但没有 workflow 图”；`build_from_spec` 把同一个规范化 mode 写入 `Scenario` 和 `ExecutionSpec`。`ExecutionSpec.__post_init__` 在存在 `workflow_factory` 时派生为 `workflow`，`Scenario.__post_init__` 与执行面同步，避免默认 `agent` 掩盖 workflow。`workflow_node` 只保留为内部执行面值。
+4. **effective policy 单源**：`pipeline._resolved_specs` 是默认表、场景层、显式 overrides、节点覆盖的唯一解析入口；`FrameworkAgent` 通过 `build_pipeline_with_policies` 一次拿到真实 `middleware` 和审计行，`effective_policies()` 也走同一入口，不再先建 pipeline 再从另一份默认表重算。显式传入自定义 `middleware` 时，审计行仍来自同一 policy 解析，但不声称覆盖任意自定义中间件的内部状态。
+5. **可观测性边界**：workflow 节点级有效策略以节点 Agent 的 trace `middleware_decision` 为准；worker result 里的 `effective_policies` 仍是场景级投影，不作为节点 override 证据。
 
 ## 6. 实测
 
@@ -135,12 +149,47 @@
 
 `robot_vacuum-v4-d30692614a` 的中断复跑记录不再作为最终证据；最终结论只绑定上述 `532c735eec` 的本次运行。
 
+### 6.1 2026-11-18 策略对齐整产品验证
+
+- 临时工程：`policy-alignment-work/case-inherit`、`case-override`、`case-disable`，每个都是完整产品副本；只隔离 data / storage / 端口 / 凭据配置，未拆组件。
+- 产物：三个临时工程分别通过正式 `save_spec` 从 v4 保存 v5，再执行 `build_project(..., include_assets=True)`：
+  - `robot_vacuum-v5-f6d613defd`（0 继承）
+  - `robot_vacuum-v5-851b6e5b2b`（正值覆盖）
+  - `robot_vacuum-v5-658735553c`（显式关闭）
+  - 三个产物 `run.py --check` 均 `ok=true`、`service_ready=true`。
+- 入口：`serve.py --instance-config`，正常 HTTP/SSE，`http://127.0.0.1:18083`；storage 为 `outputs/policy-alignment-v1/storage/<case>`。18080 / 18082 未启动、未触碰。
+- 模型：复用 `outputs/runtime-refactor-v1/instance.env` 的合法凭据，未打印值；每个配置只跑 1 个真实模型 turn。
+
+三种配置的实际 trace（节点 `workflow:agent/node:agent` 的 `middleware_decision`）：
+
+| 配置 | spec | effective `limit` | 顶层工具调用 | 检索结果 | turn |
+| --- | --- | --- | --- | --- | --- |
+| 0 继承 | `harness.tool_call_limit=6`，`max_steps=0` | `enabled=true`，`source=scenario_policy`，`run_limit=6` | 2 | 5 | answered |
+| 正值覆盖 | `harness.tool_call_limit=6`，`max_steps=2` | `enabled=true`，`source=node_override`，`run_limit=2` | 2 | 6 | answered |
+| 显式关闭 | `harness.tool_call_limit=6`，`max_steps=0`，`policies=[limit.enabled=false]` | `enabled=false`，`source=scenario_policy` | 2 | 8 | answered |
+
+工具计数是顶层 Agent 工具调用（排除 `ToolSpec` 包装产生的 `spec-*` 内层 trace）；原始 trace 同时记录包装内外两层，不能直接当成 Agent 工具次数。正值覆盖配置达到 `2/2`，但没有观察到被阻断的调用，因此只证明 effective `run_limit=2` 实际装配，不宣称“限制阻断已证”。
+
+主线回归只跑 2 cases / 4 turns（inherit 产物）：
+
+- `ml-recharge-normal-closure`：turn 1 `retrieval_status=ok`、有引用；turn 2 为 `not_retrieved`，与 12 案运行中同一条已知结构失败一致，冻结预期未改，不归因于本轮策略改动。
+- `ml-suction-correction-third-party`：两轮 `retrieval_status=ok`，均有引用。
+- 4 个 turn 均 `answered`；这是结构观察，不是语义成功率。
+
+定向与相邻回归：`tests/test_runtime_refactor.py` 17 passed；`tests/test_startup_profile.py`、`tests/test_demo_readiness.py` 11 passed；`tests/test_product_closed_loop.py`、`tests/test_p1_recharge.py` 39 passed / 24 subtests passed。未重新跑全量 pytest。
+
+验证口径：上述 3 个配置各 1 个真实 turn + 2 个主线 case / 4 turn，是完整 artifact 的正常 `serve.py` HTTP/SSE 验证，**已跑**；组件测试只作定位辅助，不能顶替整产品验收。**未跑**：完整 12 案、Docker/容器、全量 pytest、语义成功率、限制阻断证明。
+
+Docker：本轮没有启动 Docker Desktop、daemon 或 GUI，因此没有容器验证。上表是完整 artifact 的正常 `serve.py` 整产品入口，不等于容器 / compose 证据。
+
 ## 7. 缺项与边界
 
-- 本机已有 Docker engine 不可用；按任务约束没有启动 Docker Desktop、daemon 或 GUI，因此没有新镜像缓存构建，也没有 Docker compose 运行。已用完整 artifact 的正常 HTTP/SSE 入口在独立端口/存储上做整产品验证；Docker 镜像/volume 证据仍缺。
-- 12 cases 是开发集，不是 holdout，不是成功率；语义判断仍需人工，不把结构通过写成语义正确。
-- 冻结 suite/cases 预期未改；本轮 1 条 `retrieval_attempted` 失败原样保留。此前同样失败、本轮通过的另一条只作为单次实测记录，不写成缺陷修复。
-- 全量 pytest 8 项失败没有做 base 对比，不能证明“既存”，按未证既存/未解决保留；本次不据此归因。
+- 本轮没有启动 Docker Desktop、daemon 或 GUI，因此没有镜像缓存构建、compose 或独立 Docker volume 证据。完整 artifact 的 `serve.py` HTTP/SSE 验证仍是整产品入口，但不是容器验证。
+- 12 cases 是开发集，不是 holdout，不是成功率；语义判断仍需人工，不把结构通过写成语义正确。本轮只复跑 2 cases / 4 turns 做主线回归，没有跑完整 12 案。
+- 冻结 suite/cases 预期未改；`ml-recharge-normal-closure` 第二轮 `retrieval_status=not_retrieved` 仍原样保留。它在本轮 2-case 回归中再次出现；`ml-suction-correction-third-party` 两轮检索均 ok。这是单次实测，不写成缺陷已修复。
+- 策略对齐的 3 个配置各只跑 1 个真实模型 turn；正值覆盖达到 `2/2` 但没有观察到被阻断的调用，因此“限制阻断”未证明，只证明了 effective policy 与真实装配一致。显式关闭配置没有与“正值节点覆盖”组合跑同一场景。
+- workflow 的节点级有效策略以节点 trace 为准；worker result 的 `effective_policies` 仍是场景级投影。不能拿场景级字段替代节点 override 证据。
+- 全量 pytest 未在本轮重跑；历史 8 项失败没有做 base 对比，不能证明“既存”，按未证既存/未解决保留。本轮定向与相邻测试通过只证明被测试行为。
 - 未做 40–60 集扩展、真实用户量、SLA、线上部署；没有外部队列工单。
 
 ## 8. 复现
@@ -157,3 +206,5 @@ python scripts/run_runtime_refactor_acceptance.py --artifact <artifact> --env-fi
 ```
 
 证据目录 `outputs/runtime-refactor-v2/` 不提交。
+
+2026-11-18 策略对齐证据在 `outputs/policy-alignment-v1/`（不提交）：`report.json`、`policy-summary.json`、每个配置的 SSE 原始事件与 trace；三个完整 artifact 在本地 `policy-alignment-built/`。

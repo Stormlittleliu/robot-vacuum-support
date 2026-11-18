@@ -1257,14 +1257,19 @@ def react_loop(
             mode="workflow_node",
             stop_when=stop_when,
         )
-        node_overrides: list[dict[str, Any]] = [
-            {
-                "name": "limit",
-                "enabled": bool(max_steps and int(max_steps) > 0),
-                "args": {"run_limit": int(max_steps)},
-                "reason": None if max_steps else "react_loop.max_steps=0 disables the tool-call limit",
-            }
-        ]
+        node_overrides: list[dict[str, Any]] = []
+        # 0/未传 表示没有节点覆盖：不生成 limit override，让节点继承场景级
+        # harness.tool_call_limit（以及 spec.policies 的显式关闭）。只有正值
+        # 才覆盖场景值。
+        step_limit = int(max_steps or 0)
+        if step_limit > 0:
+            node_overrides.append(
+                {
+                    "name": "limit",
+                    "enabled": True,
+                    "args": {"run_limit": step_limit},
+                }
+            )
         if enable_summarization is not None:
             node_overrides.append(
                 {

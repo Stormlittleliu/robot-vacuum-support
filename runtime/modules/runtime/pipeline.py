@@ -349,25 +349,7 @@ def _jsonable(value: Any) -> Any:
     return f"<{type(value).__name__}>"
 
 
-def effective_policies(
-    scenario: Any,
-    hook_manager: Any = None,
-    execution: Any = None,
-    *,
-    node_overrides: list[Any] | None = None,
-) -> list[dict[str, Any]]:
-    """返回 effective policy（值 / 来源 / harness 默认），不构建中间件。
-
-    优先级：节点显式覆盖（仅真实 workflow 节点）> 场景 policy
-    （Scenario 字段 / spec.harness / spec.policies）> harness 默认。
-    """
-    if execution is None:
-        resolve = getattr(scenario, "resolve_execution", None)
-        execution = resolve() if callable(resolve) else None
-    specs = _harness_default_specs()
-    specs = _apply_layer(specs, _scenario_layer(scenario, hook_manager, execution), source="scenario_policy")
-    if node_overrides:
-        specs = _apply_layer(specs, node_overrides, source="node_override")
+def _policy_rows(specs: list[PolicySpec]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for spec in specs:
         policy = policy_registry.find(spec.name)
@@ -384,6 +366,53 @@ def effective_policies(
             }
         )
     return rows
+
+
+def _resolved_specs(
+    scenario: Any,
+    hook_manager: Any = None,
+    overrides: list[Any] | None = None,
+    execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
+) -> list[PolicySpec]:
+    """唯一的策略解析入口：默认表 + 场景层 + 显式 overrides + 节点覆盖。"""
+    if execution is None:
+        resolve = getattr(scenario, "resolve_execution", None)
+        execution = resolve() if callable(resolve) else None
+    if overrides is None and execution is not None:
+        overrides = getattr(execution, "policies", None)
+    specs = default_policies(scenario, hook_manager, execution)
+    specs = _merge(specs, overrides, source="scenario_policy")
+    if node_overrides:
+        specs = _merge(specs, node_overrides, source="node_override")
+    _validate_specs(specs)
+    return specs
+
+
+def effective_policies(
+    scenario: Any,
+    hook_manager: Any = None,
+    execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
+    overrides: list[Any] | None = None,
+) -> list[dict[str, Any]]:
+    """返回 effective policy（值 / 来源 / harness 默认），不构建中间件。
+
+    优先级：节点显式覆盖（仅真实 workflow 节点）> 场景 policy
+    （Scenario 字段 / spec.harness / spec.policies）> harness 默认。
+    与 ``build_pipeline`` 共用 ``_resolved_specs``，不是第二套默认表。
+    """
+    return _policy_rows(
+        _resolved_specs(
+            scenario,
+            hook_manager,
+            overrides,
+            execution,
+            node_overrides=node_overrides,
+        )
+    )
 
 
 def default_policies(
@@ -423,25 +452,11 @@ def _validate_specs(specs: list[PolicySpec]) -> None:
         raise PipelineError(errors)
 
 
-def _entries(
+def _entries_for_specs(
+    specs: list[PolicySpec],
     scenario: Any,
-    hook_manager: Any = None,
-    overrides: list[Any] | None = None,
     execution: Any = None,
-    *,
-    node_overrides: list[Any] | None = None,
 ) -> list[Entry]:
-    if execution is None:
-        resolve = getattr(scenario, "resolve_execution", None)
-        execution = resolve() if callable(resolve) else None
-    if overrides is None and execution is not None:
-        overrides = getattr(execution, "policies", None)
-    specs = default_policies(scenario, hook_manager, execution)
-    specs = _merge(specs, overrides, source="scenario_policy")
-    if node_overrides:
-        specs = _merge(specs, node_overrides, source="node_override")
-    _validate_specs(specs)
-
     entries: list[Entry] = []
     seq = 0
     for spec in specs:
@@ -487,6 +502,24 @@ def _entries(
     return entries
 
 
+def _entries(
+    scenario: Any,
+    hook_manager: Any = None,
+    overrides: list[Any] | None = None,
+    execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
+) -> list[Entry]:
+    specs = _resolved_specs(
+        scenario,
+        hook_manager,
+        overrides,
+        execution,
+        node_overrides=node_overrides,
+    )
+    return _entries_for_specs(specs, scenario, execution)
+
+
 def _keep(middleware: Any) -> Any:
     return middleware
 
@@ -518,6 +551,30 @@ def build_pipeline(
             scenario, hook_manager, overrides, execution, node_overrides=node_overrides
         )
     ]
+
+
+def build_pipeline_with_policies(
+    scenario: Any,
+    hook_manager: Any = None,
+    overrides: list[Any] | None = None,
+    execution: Any = None,
+    *,
+    node_overrides: list[Any] | None = None,
+) -> tuple[list[Any], list[dict[str, Any]]]:
+    """一次解析同时返回真实中间件和它们的 effective policy。
+
+    ``FrameworkAgent`` 用这个入口，保证审计行与真正装配的中间件来自同一份
+    resolved specs，而不是先建 pipeline、再从默认表重算一遍。
+    """
+    specs = _resolved_specs(
+        scenario,
+        hook_manager,
+        overrides,
+        execution,
+        node_overrides=node_overrides,
+    )
+    entries = _entries_for_specs(specs, scenario, execution)
+    return [entry.factory() for entry in entries], _policy_rows(specs)
 
 
 def describe_pipeline(

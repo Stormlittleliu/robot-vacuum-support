@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable
 from core.agent.policy_meta import policy_names
 from core.prompts.blocks import PromptBook, validate_book
 from modules.scenario_format.edges import END, START, edge_pair, split_edge
+from modules.scenario_format.modes import VALID_SCENE_MODES
 from modules.scenario_format.spec_nodes import (
     NODE_REGISTRY,
     ResolvedPorts,
@@ -464,6 +465,19 @@ def check_spec(
         ))
     if not spec.name.strip():
         issues.append(Issue("spec.name_empty", "scenario.name 不能为空"))
+    declared_mode = str(spec.mode or "").strip()
+    if declared_mode and declared_mode not in VALID_SCENE_MODES:
+        issues.append(Issue(
+            "spec.mode_invalid",
+            f"mode 必须是 agent 或 workflow，收到 {spec.mode!r}",
+        ))
+    elif declared_mode == "workflow" and not spec.workflows:
+        # workflow 模式的执行入口是 workflow_factory；没有图就没有可执行路径，
+        # 不能让 Scenario/ExecutionSpec 的默认 agent 静默接管。
+        issues.append(Issue(
+            "spec.mode_without_workflow",
+            "mode=workflow 但没有 workflow 图",
+        ))
     # 允许没有 workflow：纯 ReAct 场景（general / coding / router…）只有一个 agent 循环。
     if spec.prompt is not None and spec.prompt.blocks and prompt_book is not None:
         for error in validate_book(list(spec.prompt.blocks), prompt_book):
